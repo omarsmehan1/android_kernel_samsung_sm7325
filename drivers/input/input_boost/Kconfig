@@ -58,7 +58,6 @@ config SEC_INPUT_BOOSTER_MTK
 
 	  If unsure, say N.
 
-
 config SEC_INPUT_BOOSTER_HANDLER
 	bool "SEC INPUT BOOSTER HANDLER"
 	depends on SEC_INPUT_BOOSTER
