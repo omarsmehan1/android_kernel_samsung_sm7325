@@ -19,7 +19,6 @@
 
 #include "sb_full_soc.h"
 #include "sec_battery.h"
-#include "battery_logger.h"
 
 struct sb_full_soc {
 	int full_capacity;
@@ -229,8 +228,6 @@ static void eu_eco_work(struct work_struct *work)
 		sec_bat_set_charging_status(battery, POWER_SUPPLY_STATUS_CHARGING);
 		battery->is_recharging = false;
 		battery->charging_mode = SEC_BATTERY_CHARGING_1ST;
-		if (battery->pdata->change_FV_after_full)
-			sec_vote(battery->fv_vote, VOTER_FULL_CHARGE, false, battery->pdata->chg_float_voltage);
 		sec_vote(battery->chgen_vote, VOTER_CABLE, true, SEC_BAT_CHG_MODE_CHARGING);
 		sec_vote(battery->topoff_vote, VOTER_FULL_CHARGE, false, 0);
 		sec_vote(battery->chgen_vote, VOTER_FULL_CHARGE, false, 0);
@@ -248,9 +245,6 @@ static void eu_eco_work(struct work_struct *work)
 update_state:
 	pr_info("%s: update eu eco rechg(%d --> %d)\n",
 		__func__, fs->is_eu_eco_rechg, fs->eu_eco_rechg_state);
-	store_battery_log("EUECO:%d->%d,%s,%d%%",
-		fs->is_eu_eco_rechg, fs->eu_eco_rechg_state,
-		sb_get_bst_str(battery->status), battery->capacity);
 	fs->is_eu_eco_rechg = fs->eu_eco_rechg_state;
 end_work:
 	mutex_unlock(&fs->lock);
@@ -355,10 +349,6 @@ static ssize_t sb_full_soc_store_attrs(struct device *dev,
 		if ((get_full_capacity(battery->fs) != x) ||
 			(get_full_cap_event(battery->fs) != full_cap_event)) {
 			is_changed = true;
-
-			store_battery_log("FCAP:%d%%->%d%%,%s->%s",
-				get_full_capacity(battery->fs), x,
-				conv_full_cap_str(get_full_cap_event(battery->fs)), conv_full_cap_str(full_cap_event));
 
 			set_full_capacity(battery->fs, x);
 			set_full_cap_event(battery->fs, full_cap_event);
@@ -511,7 +501,7 @@ void sec_bat_check_full_capacity(struct sec_battery_info *battery)
 			(is_full_cap_event_highsoc(battery->fs) ?
 				SEC_BAT_CHG_MODE_BUCK_OFF : SEC_BAT_CHG_MODE_CHARGING_OFF));
 
-		if (is_wireless_all_type(battery->cable_type)) {
+		if (is_wireless_fake_type(battery->cable_type)) {
 			value.intval = POWER_SUPPLY_STATUS_FULL;
 			psy_do_property(battery->pdata->wireless_charger_name, set,
 				POWER_SUPPLY_PROP_STATUS, value);

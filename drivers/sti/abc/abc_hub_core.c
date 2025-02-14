@@ -81,12 +81,24 @@ static const struct of_device_id abc_hub_dt_match[] = {
 static int abc_hub_suspend(struct device *dev)
 {
 	int ret = 0;
+#if IS_ENABLED(CONFIG_SEC_ABC_HUB_COND)
+	struct abc_hub_info *pinfo = dev_get_drvdata(dev);
+
+	if (pinfo->pdata->cond.init)
+		ret = abc_hub_cond_suspend(dev);
+#endif
 	return ret;
 }
 
 static int abc_hub_resume(struct device *dev)
 {
 	int ret = 0;
+#if IS_ENABLED(CONFIG_SEC_ABC_HUB_COND)
+	struct abc_hub_info *pinfo = dev_get_drvdata(dev);
+
+	if (pinfo->pdata->cond.init)
+		ret = abc_hub_cond_resume(dev);
+#endif
 	return ret;
 }
 
