@@ -441,11 +441,6 @@ static inline bool __has_cursum_space(struct f2fs_journal *journal,
 	return size <= MAX_SIT_JENTRIES(journal);
 }
 
-#ifdef CONFIG_DDAR
-#define F2FS_IOC_GET_DD_POLICY		FS_IOC_GET_DD_POLICY
-#define F2FS_IOC_SET_DD_POLICY		FS_IOC_SET_DD_POLICY
-#endif
-
 /* for inline stuff */
 #define DEF_INLINE_RESERVED_SIZE	1
 static inline int get_extra_isize(struct inode *inode);
