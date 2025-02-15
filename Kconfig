@@ -29,11 +29,13 @@ source "lib/Kconfig"
 
 source "lib/Kconfig.debug"
 
+source "techpack/Kconfig"
+
 source "Documentation/Kconfig"
 
 source "techpack/display/msm/dp/Kconfig"
 
-source "techpack/camera/drivers/Kconfig"
+source "techpack/sec-camera/drivers/Kconfig"
 
 source "test/Kconfig"
 

@@ -315,7 +315,7 @@ int32_t cam_context_config_dev_to_hw(
 			ctx->dev_name, ctx->ctx_id);
 		rc = -EFAULT;
 	}
-	cam_mem_put_cpu_buf((int32_t) cmd->packet_handle);
+
 	return rc;
 }
 
@@ -377,7 +377,6 @@ int32_t cam_context_prepare_dev_to_hw(struct cam_context *ctx,
 	if ((len < sizeof(struct cam_packet)) ||
 		(cmd->offset >= (len - sizeof(struct cam_packet)))) {
 		CAM_ERR(CAM_CTXT, "Not enough buf");
-		cam_mem_put_cpu_buf((int32_t) cmd->packet_handle);
 		return -EINVAL;
 
 	}
@@ -496,7 +495,7 @@ int32_t cam_context_prepare_dev_to_hw(struct cam_context *ctx,
 				req->in_map_entries[j].sync_id, rc);
 		}
 	}
-	cam_mem_put_cpu_buf((int32_t) cmd->packet_handle);
+
 	return rc;
 put_ref:
 	for (--i; i >= 0; i--) {
@@ -510,7 +509,6 @@ free_req:
 	req->ctx = NULL;
 	spin_unlock(&ctx->lock);
 
-	cam_mem_put_cpu_buf((int32_t) cmd->packet_handle);
 	return rc;
 }
 
@@ -1111,7 +1109,6 @@ static int cam_context_dump_context(struct cam_context *ctx,
 	if (dump_args->offset >= buf_len) {
 		CAM_WARN(CAM_CTXT, "dump buffer overshoot offset %zu len %zu",
 			dump_args->offset, buf_len);
-		cam_mem_put_cpu_buf(dump_args->buf_handle);
 		return -ENOSPC;
 	}
 
@@ -1123,7 +1120,6 @@ static int cam_context_dump_context(struct cam_context *ctx,
 	if (remain_len < min_len) {
 		CAM_WARN(CAM_CTXT, "dump buffer exhaust remain %zu min %u",
 			remain_len, min_len);
-		cam_mem_put_cpu_buf(dump_args->buf_handle);
 		return -ENOSPC;
 	}
 	dst = (uint8_t *)cpu_addr + dump_args->offset;
@@ -1148,8 +1144,7 @@ static int cam_context_dump_context(struct cam_context *ctx,
 	hdr->size = hdr->word_size * (addr - start);
 	dump_args->offset += hdr->size +
 		sizeof(struct cam_context_dump_header);
-	cam_mem_put_cpu_buf(dump_args->buf_handle);
-	return 0;
+	return rc;
 }
 
 int32_t cam_context_dump_dev_to_hw(struct cam_context *ctx,
