@@ -105,10 +105,6 @@
 #include "audit.h"
 #include "avc_ss.h"
 
-#ifdef CONFIG_KDP
-#include <linux/kdp.h>
-#endif
-
 #ifdef CONFIG_QCOM_RTIC
 struct selinux_state selinux_state __rticdata;
 #else
@@ -243,11 +239,7 @@ static void cred_init_security(void)
 	struct cred *cred = (struct cred *) current->real_cred;
 	struct task_security_struct *tsec;
 
-#ifdef CONFIG_KDP_CRED
-	tsec = (struct task_security_struct *)cred_init_security_kdp(cred);
-#else
 	tsec = selinux_cred(cred);
-#endif
 	tsec->osid = tsec->sid = SECINITSID_KERNEL;
 }
 
@@ -6963,11 +6955,7 @@ static int selinux_perf_event_write(struct perf_event *event)
 }
 #endif
 
-#ifdef CONFIG_KDP_CRED
-static struct security_hook_list selinux_hooks[] __lsm_ro_after_init_kdp = {
-#else
 static struct security_hook_list selinux_hooks[] __lsm_ro_after_init = {
-#endif
 	LSM_HOOK_INIT(binder_set_context_mgr, selinux_binder_set_context_mgr),
 	LSM_HOOK_INIT(binder_transaction, selinux_binder_transaction),
 	LSM_HOOK_INIT(binder_transfer_binder, selinux_binder_transfer_binder),
