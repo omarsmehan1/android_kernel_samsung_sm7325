@@ -269,6 +269,7 @@ static int fscrypt_new_context_from_policy(union fscrypt_context *ctx_u,
 		       policy->master_key_descriptor,
 		       sizeof(ctx->master_key_descriptor));
 		get_random_bytes(ctx->nonce, sizeof(ctx->nonce));
+
 		return sizeof(*ctx);
 	}
 	case FSCRYPT_POLICY_V2: {
@@ -285,8 +286,9 @@ static int fscrypt_new_context_from_policy(union fscrypt_context *ctx_u,
 		       policy->master_key_identifier,
 		       sizeof(ctx->master_key_identifier));
 		get_random_bytes(ctx->nonce, sizeof(ctx->nonce));
+
 		return sizeof(*ctx);
-	}
+		}
 	}
 	BUG();
 }
@@ -548,6 +550,7 @@ int fscrypt_ioctl_get_nonce(struct file *filp, void __user *arg)
 	ret = inode->i_sb->s_cop->get_context(inode, &ctx, sizeof(ctx));
 	if (ret < 0)
 		return ret;
+
 	if (!fscrypt_context_is_valid(&ctx, ret))
 		return -EINVAL;
 	if (copy_to_user(arg, fscrypt_context_nonce(&ctx),
@@ -656,6 +659,7 @@ int fscrypt_inherit_context(struct inode *parent, struct inode *child,
 	ctxsize = fscrypt_new_context_from_policy(&ctx, &ci->ci_policy);
 
 	BUILD_BUG_ON(sizeof(ctx) != FSCRYPT_SET_CONTEXT_MAX_SIZE);
+
 	res = parent->i_sb->s_cop->set_context(child, &ctx, ctxsize, fs_data);
 	if (res)
 		return res;

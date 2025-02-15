@@ -75,9 +75,9 @@ struct task_struct init_task
 	.cpus_mask	= CPU_MASK_ALL,
 	.nr_cpus_allowed= NR_CPUS,
 #ifdef CONFIG_SCHED_WALT
+	.wts		= {0, },
 	.wts		= {
 		.cpus_requested	= CPU_MASK_ALL,
-		.wake_up_idle	= false,
 	},
 #endif
 	.mm		= NULL,

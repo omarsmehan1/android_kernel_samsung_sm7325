@@ -48,6 +48,10 @@
 
 #include "internal.h"
 
+#if IS_ENABLED(CONFIG_SEC_SLUB_DEBUG)
+#include <linux/sec_debug.h>
+#endif
+
 /*
  * Lock order:
  *   1. slab_mutex (Global Mutex)
@@ -2686,6 +2690,9 @@ load_freelist:
 	 */
 	VM_BUG_ON(!c->page->frozen);
 	c->freelist = get_freepointer(s, freelist);
+#if IS_ENABLED(CONFIG_SEC_SLUB_DEBUG)
+	sec_slub_debug_panic_on_fp_corrupted(s, freelist, c->freelist);
+#endif
 	c->tid = next_tid(c->tid);
 	return freelist;
 
@@ -3068,6 +3075,9 @@ redo:
 
 	/* Same with comment on barrier() in slab_alloc_node() */
 	barrier();
+#if IS_ENABLED(CONFIG_SEC_SLUB_DEBUG)
+	sec_slub_debug_save_free_track(s, tail_obj);
+#endif
 
 	if (likely(page == c->page)) {
 		void **freelist = READ_ONCE(c->freelist);
@@ -6170,12 +6180,12 @@ static int alloc_trace_locations(struct seq_file *seq, struct kmem_cache *s,
 		unsigned int j = 0;
 
 		seq_printf(seq,
-		"alloc_list: call_site=%pS count=%zu object_size=%zu slab_size=%zu slab_name=%s\n",
+		"alloc_list: call_site=%pS count=%lu object_size=%u slab_size=%u slab_name=%s\n",
 			(void *)l->addr, l->count, s->object_size, s->size, s->name);
 #ifdef CONFIG_STACKTRACE
 		for (j = 0; j < TRACK_ADDRS_COUNT; j++)
 			if (l->addrs[j]) {
-				seq_printf(seq, "%pS\n", l->addrs[j]);
+				seq_printf(seq, "%pS\n", (void *)l->addrs[j]);
 				continue;
 			} else
 				break;

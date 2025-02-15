@@ -10,9 +10,11 @@
  * Author: Dan Magenheimer
  */
 
+#include <linux/bitops.h>
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/exportfs.h>
+#include <linux/gfp.h>
 #include <linux/mm.h>
 #include <linux/debugfs.h>
 #include <linux/cleancache.h>

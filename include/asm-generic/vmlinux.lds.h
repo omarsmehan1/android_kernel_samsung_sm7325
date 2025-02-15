@@ -874,6 +874,16 @@
 		KEEP(*(.con_initcall.init))				\
 		__con_initcall_end = .;
 
+#ifdef CONFIG_SEC_KUNIT
+#define KUNIT_TEST_MODULES						\
+		. = ALIGN(8);						\
+		__test_modules_start = .;				\
+		KEEP(*(.test_modules))					\
+		__test_modules_end = .;
+#else
+#define KUNIT_TEST_MODULES
+#endif
+
 #ifdef CONFIG_BLK_DEV_INITRD
 #define INIT_RAM_FS							\
 	. = ALIGN(4);							\
@@ -1049,6 +1059,7 @@
 		INIT_CALLS						\
 		CON_INITCALL						\
 		INIT_RAM_FS						\
+		KUNIT_TEST_MODULES					\
 	}
 
 #define BSS_SECTION(sbss_align, bss_align, stop_align)			\
