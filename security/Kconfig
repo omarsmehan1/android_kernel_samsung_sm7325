@@ -316,7 +316,6 @@ source "security/hdm/Kconfig"
 
 source "security/samsung/proca/Kconfig" # ADDED BY LEGO AUTOMATICALLY: DO NOT SUBMIT
 source "security/samsung/proca/gaf/Kconfig" # ADDED BY LEGO AUTOMATICALLY: DO NOT SUBMIT
-source "security/samsung/dsms/Kconfig" # ADDED BY LEGO AUTOMATICALLY: DO NOT SUBMIT
 source "security/samsung/five/Kconfig" # ADDED BY LEGO AUTOMATICALLY: DO NOT SUBMIT
 endmenu
 
