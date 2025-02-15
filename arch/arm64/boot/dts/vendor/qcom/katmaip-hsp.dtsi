@@ -1,9 +1,0 @@
-#include "yupikp-iot-hsp.dtsi"
-
-&pcie1 {
-	status = "disabled";
-};
-
-&pcie1_msi {
-	status = "disabled";
-};
