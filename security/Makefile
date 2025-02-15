@@ -38,6 +38,3 @@ obj-$(CONFIG_INTEGRITY)			+= integrity/
 # Knox SDP
 obj-$(CONFIG_SDP) += sdp/
 obj-$(CONFIG_SDP) += sdp/built-in.a
-
-# HDM driver
-obj-$(CONFIG_HDM)			+= hdm/
