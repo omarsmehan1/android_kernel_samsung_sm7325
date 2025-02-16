@@ -1912,85 +1912,86 @@ static int sm5714_fg_get_property(struct power_supply *psy,
 			SEC_FUELGAUGE_CAPACITY_TYPE_DYNAMIC_SCALE))
 			sm5714_fg_get_scaled_capacity(fuelgauge, val);
 
-			/* capacity should be between 0% and 100%
-			* (0.1% degree)
-			*/
-			if (val->intval > 1000)
-				val->intval = 1000;
-			if (val->intval < 0)
-				val->intval = 0;
+		/* capacity should be between 0% and 100%
+		* (0.1% degree)
+		*/
+		if (val->intval > 1000)
+			val->intval = 1000;
 
-			fuelgauge->raw_capacity = val->intval;
+		if (val->intval < 0)
+			val->intval = 0;
 
-			/* get only integer part */
-			val->intval /= 10;
+		fuelgauge->raw_capacity = val->intval;
 
-			/* SW/HW V Empty setting */
-			if (fuelgauge->using_hw_vempty) {
-				if (fuelgauge->info.temperature <= (int)fuelgauge->low_temp_limit) {
-					if (fuelgauge->raw_capacity <= 50) {
-						if (fuelgauge->vempty_mode != VEMPTY_MODE_HW) {
-							sm5714_fg_set_vempty(fuelgauge, VEMPTY_MODE_HW);
-						}
-					} else if (fuelgauge->vempty_mode == VEMPTY_MODE_HW) {
-						sm5714_fg_set_vempty(fuelgauge, VEMPTY_MODE_SW);
+		/* get only integer part */
+		val->intval /= 10;
+
+		/* SW/HW V Empty setting */
+		if (fuelgauge->using_hw_vempty) {
+			if (fuelgauge->info.temperature <= (int)fuelgauge->low_temp_limit) {
+				if (fuelgauge->raw_capacity <= 50) {
+					if (fuelgauge->vempty_mode != VEMPTY_MODE_HW) {
+						sm5714_fg_set_vempty(fuelgauge, VEMPTY_MODE_HW);
 					}
-				} else if (fuelgauge->vempty_mode != VEMPTY_MODE_HW) {
-					sm5714_fg_set_vempty(fuelgauge, VEMPTY_MODE_HW);
+				} else if (fuelgauge->vempty_mode == VEMPTY_MODE_HW) {
+					sm5714_fg_set_vempty(fuelgauge, VEMPTY_MODE_SW);
 				}
+			} else if (fuelgauge->vempty_mode != VEMPTY_MODE_HW) {
+				sm5714_fg_set_vempty(fuelgauge, VEMPTY_MODE_HW);
 			}
-
-			if (!fuelgauge->is_charging &&
-			    fuelgauge->vempty_mode == VEMPTY_MODE_SW_VALERT && !sm5714_get_lpmode()) {
-				pr_info("%s : SW V EMPTY. Decrease SOC\n", __func__);
-				if (fuelgauge->capacity_old > 0)
-					val->intval = fuelgauge->capacity_old - 1;
-				else
-					val->intval = 0;
-			} else if ((fuelgauge->vempty_mode == VEMPTY_MODE_SW_RECOVERY) &&
-				   (val->intval == fuelgauge->capacity_old)) {
-				fuelgauge->vempty_mode = VEMPTY_MODE_SW;
-			}
-
-			/* check whether doing the wake_unlock */
-			if ((val->intval > fuelgauge->pdata->fuel_alert_soc) &&
-				fuelgauge->is_fuel_alerted) {
-				sm5714_fg_fuelalert_init(fuelgauge,
-					fuelgauge->pdata->fuel_alert_soc);
-			}
-
-			/* (Only for atomic capacity)
-			* In initial time, capacity_old is 0.
-			* and in resume from sleep,
-			* capacity_old is too different from actual soc.
-			* should update capacity_old
-			* by val->intval in booting or resume.
-			*/
-			if (fuelgauge->initial_update_of_soc) {
-				fuelgauge->initial_update_of_soc = false;
-				if (fuelgauge->vempty_mode != VEMPTY_MODE_SW_VALERT) {
-					/* updated old capacity */
-					fuelgauge->capacity_old = val->intval;
-					break;
-				}
-			}
-
-			if (fuelgauge->sleep_initial_update_of_soc) {
-				fuelgauge->sleep_initial_update_of_soc = false;
-				/* updated old capacity in case of resume */
-				if (fuelgauge->is_charging ||
-					((!fuelgauge->is_charging) && (fuelgauge->capacity_old >= val->intval))) {
-					fuelgauge->capacity_old = val->intval;
-					break;
-				}
-			}
-
-			if (fuelgauge->pdata->capacity_calculation_type &
-				(SEC_FUELGAUGE_CAPACITY_TYPE_ATOMIC |
-				SEC_FUELGAUGE_CAPACITY_TYPE_SKIP_ABNORMAL)){
-				sm5714_fg_get_atomic_capacity(fuelgauge, val);
 		}
-		break;
+
+		if (!fuelgauge->is_charging &&
+		    fuelgauge->vempty_mode == VEMPTY_MODE_SW_VALERT && !sm5714_get_lpmode()) {
+			pr_info("%s : SW V EMPTY. Decrease SOC\n", __func__);
+			if (fuelgauge->capacity_old > 0)
+				val->intval = fuelgauge->capacity_old - 1;
+			else
+				val->intval = 0;
+		} else if ((fuelgauge->vempty_mode == VEMPTY_MODE_SW_RECOVERY) &&
+			   (val->intval == fuelgauge->capacity_old)) {
+			fuelgauge->vempty_mode = VEMPTY_MODE_SW;
+		}
+
+		/* check whether doing the wake_unlock */
+		if ((val->intval > fuelgauge->pdata->fuel_alert_soc) &&
+			fuelgauge->is_fuel_alerted) {
+			sm5714_fg_fuelalert_init(fuelgauge,
+				fuelgauge->pdata->fuel_alert_soc);
+		}
+
+		/* (Only for atomic capacity)
+		* In initial time, capacity_old is 0.
+		* and in resume from sleep,
+		* capacity_old is too different from actual soc.
+		* should update capacity_old
+		* by val->intval in booting or resume.
+		*/
+		if (fuelgauge->initial_update_of_soc) {
+			fuelgauge->initial_update_of_soc = false;
+			if (fuelgauge->vempty_mode != VEMPTY_MODE_SW_VALERT) {
+				/* updated old capacity */
+				fuelgauge->capacity_old = val->intval;
+				break;
+			}
+		}
+
+		if (fuelgauge->sleep_initial_update_of_soc) {
+			fuelgauge->sleep_initial_update_of_soc = false;
+			/* updated old capacity in case of resume */
+			if (fuelgauge->is_charging ||
+				((!fuelgauge->is_charging) && (fuelgauge->capacity_old >= val->intval))) {
+				fuelgauge->capacity_old = val->intval;
+				break;
+			}
+		}
+
+		if (fuelgauge->pdata->capacity_calculation_type &
+			(SEC_FUELGAUGE_CAPACITY_TYPE_ATOMIC |
+			SEC_FUELGAUGE_CAPACITY_TYPE_SKIP_ABNORMAL)){
+			sm5714_fg_get_atomic_capacity(fuelgauge, val);
+		}
+	break;
 	/* Battery Temperature */
 	case POWER_SUPPLY_PROP_TEMP:
 	/* Target Temperature */
