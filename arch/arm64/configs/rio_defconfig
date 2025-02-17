@@ -6468,8 +6468,8 @@ CONFIG_SUPPORT_HV_CTRL=y
 #
 # samsung Performace manager
 #
-CONFIG_KPERFMON=y
-CONFIG_KPERFMON_BUILD=y
+# CONFIG_KPERFMON is not set
+# CONFIG_KPERFMON_BUILD is not set
 # end of samsung Performace manager
 
 # CONFIG_MFD_SM5714 is not set
