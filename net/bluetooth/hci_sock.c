@@ -971,7 +971,6 @@ static int hci_sock_ioctl(struct socket *sock, unsigned int cmd,
 			  unsigned long arg)
 {
 #if 0
-    /*
 	void __user *argp = (void __user *)arg;
 	struct sock *sk = sock->sk;
 	int err;
