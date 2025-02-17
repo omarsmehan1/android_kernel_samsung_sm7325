@@ -948,6 +948,9 @@ static void kgsl_contiguous_free(struct kgsl_memdesc *memdesc)
 {
 	if (!memdesc->hostptr)
 		return;
+		
+	if (memdesc->priv & KGSL_MEMDESC_MAPPED)
+		return;
 
 	if (memdesc->priv & KGSL_MEMDESC_MAPPED)
 		return;

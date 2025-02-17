@@ -10,7 +10,7 @@
 	dtbo-hw_rev_end = <0x20>;
 
 	fragment@smd {
-		target-path = "/";
+		target-path = [2f 00];
 
 		__overlay__ {
 
@@ -293,9 +293,9 @@
 				input_booster {
 					status = "okay";
 					compatible = "input_booster";
-					resValcount = "2";
-					max_resource_count = "4";
-					max_cluster_count = "3";
+					resValcount = [32 00];
+					max_resource_count = [34 00];
+					max_cluster_count = [33 00];
 					#address-cells = <0x1>;
 					#size-cells = <0x0>;
 					cpu_cluster_policy = "7,4,0";
@@ -5672,7 +5672,7 @@
 	};
 
 	fragment@model {
-		target-path = "/";
+		target-path = [2f 00];
 
 		__overlay__ {
 
