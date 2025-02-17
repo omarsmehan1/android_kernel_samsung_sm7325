@@ -159,7 +159,7 @@ export PROJECT_NAME=${MODEL}
 [ -z ${PLATFORM_VERSION} ] && export PLATFORM_VERSION=11
 
 # Target build parameters
-KERNEL_DEFCONFIG=vendor/a52sxq_eur_open_defconfig
+KERNEL_DEFCONFIG=vendor/a73xq_eur_open_defconfig
 
 if [ -n "${REGION}" ]; then
 VARIANT_DEFCONFIG=vendor/samsung/${MODEL}_${REGION}.config
