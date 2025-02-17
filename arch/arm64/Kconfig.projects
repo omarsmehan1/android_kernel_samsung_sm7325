@@ -1,12 +1,12 @@
-config SEC_A52SXQ_PROJECT
+config SEC_A73XQ_PROJECT
 	default n
-	bool "Samsung A52SXQ Project"
+	bool "Samsung A73XQ Project"
 	help
-	  Support for Samsung A52SXQ Project
+	  Support for Samsung A73XQ Project
 
-config MACH_A52SXQ_EUR_OPEN
+config MACH_A73XQ_EUR_OPEN
 	default n
-	bool "Samsung A52SXQ EUR OPEN"
+	bool "Samsung A73XQ EUR OPEN"
 	help
-	  Support for Samsung A52SXQ EUR OPEN device.
+	  Support for Samsung A73XQ EUR OPEN device.
 

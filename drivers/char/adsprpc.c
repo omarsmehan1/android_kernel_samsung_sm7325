@@ -1304,13 +1304,14 @@ static void fastrpc_mmap_free(struct fastrpc_mmap *map, uint32_t flags)
 			map->refs--;
 		if (!map->refs && !map->is_persistent)
 			hlist_del_init(&map->hn);
-		spin_unlock(&me->hlock);
 		if (map->refs > 0) {
 			ADSPRPC_WARN(
 				"multiple references for remote heap size %zu va 0x%lx ref count is %d\n",
 				map->size, map->va, map->refs);
+			spin_unlock(&me->hlock);
 			return;
 		}
+		spin_unlock(&me->hlock);
 		if (map->is_persistent && map->in_use) {
 			spin_lock(&me->hlock);
 			map->in_use = false;

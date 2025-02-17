@@ -34,6 +34,8 @@
 #include <linux/pm_wakeup.h>
 #include <linux/battery/sec_battery_common.h>
 #include <dt-bindings/battery/sec-battery.h>
+#include "sec_battery_vote.h"
+#include "sec_charging_modprobe.h"
 
 /* definitions */
 #define SEC_BATTERY_CABLE_HV_WIRELESS_ETX	100
@@ -46,6 +48,27 @@
 #define MFC_LDO_OFF		0
 
 #define TX_ID_CHECK_CNT		3
+#define MISALIGN_TX_TRY_CNT	3
+
+#define WL_TO_W 99
+
+#if IS_ENABLED(CONFIG_USB_FACTORY_MODE)
+#define FOREACH_BOOT_MODE(GEN_BOOT_MODE) \
+	GEN_BOOT_MODE(NO_MODE) \
+	GEN_BOOT_MODE(OB_MODE) \
+	GEN_BOOT_MODE(IB_MODE)
+
+#define GENERATE_BOOT_MODE_ENUM(ENUM) ENUM,
+#define GENERATE_BOOT_MODE_STRING(STRING) #STRING,
+
+enum BOOT_MODE_ENUM {
+	FOREACH_BOOT_MODE(GENERATE_BOOT_MODE_ENUM)
+};
+
+static const char * const BOOT_MODE_STRING[] = {
+	FOREACH_BOOT_MODE(GENERATE_BOOT_MODE_STRING)
+};
+#endif
 
 enum battery_thermal_zone {
 	BAT_THERMAL_COLD = 0,
@@ -56,6 +79,12 @@ enum battery_thermal_zone {
 	BAT_THERMAL_WARM,
 	BAT_THERMAL_OVERHEAT,
 	BAT_THERMAL_OVERHEATLIMIT,
+};
+
+enum sb_wireless_mode {
+	SB_WRL_NONE = 0,
+	SB_WRL_RX_MODE = 1,
+	SB_WRL_TX_MODE = 2,
 };
 
 enum rx_device_type {
@@ -90,10 +119,18 @@ enum sec_battery_voltage_type {
 	SEC_BATTERY_VOLTAGE_MV,
 };
 
+enum sec_battery_temp_type {
+	/* temp */
+	SEC_BATTERY_TEMP_TEMP = 0,
+	/* adc */
+	SEC_BATTERY_TEMP_ADC,
+};
+
 #if IS_ENABLED(CONFIG_DUAL_BATTERY)
 enum sec_battery_dual_mode {
 	SEC_DUAL_BATTERY_MAIN = 0,
 	SEC_DUAL_BATTERY_SUB,
+	SEC_DUAL_BATTERY_TOTAL,
 };
 #endif
 
@@ -116,6 +153,8 @@ enum sec_battery_capacity_mode {
 	SEC_BATTERY_CAPACITY_QH,
 	/* vfsoc */
 	SEC_BATTERY_CAPACITY_VFSOC,
+	/* rcomp0 */
+	SEC_BATTERY_CAPACITY_RC0,
 };
 
 enum sec_wireless_info_mode {
@@ -153,74 +192,103 @@ enum sec_wireless_auth_mode {
 	WIRELESS_AUTH_PASS,
 };
 
-enum sec_wireless_rx_control_mode {
-	WIRELESS_PAD_FAN_OFF = 0,
-	WIRELESS_PAD_FAN_ON,
-	WIRELESS_PAD_LED_OFF,
-	WIRELESS_PAD_LED_ON,
-	WIRELESS_PAD_LED_DIMMING,
-	WIRELESS_VRECT_ADJ_ON,
-	WIRELESS_VRECT_ADJ_OFF,
-	WIRELESS_VRECT_ADJ_ROOM_0,
-	WIRELESS_VRECT_ADJ_ROOM_1,
-	WIRELESS_VRECT_ADJ_ROOM_2,
-	WIRELESS_VRECT_ADJ_ROOM_3,
-	WIRELESS_VRECT_ADJ_ROOM_4,
-	WIRELESS_VRECT_ADJ_ROOM_5,
-	WIRELESS_CLAMP_ENABLE,
-	WIRELESS_SLEEP_MODE_ENABLE,
-	WIRELESS_SLEEP_MODE_DISABLE,
-};
-
-enum sec_wireless_tx_vout {
-	WC_TX_VOUT_OFF = 0,
-	WC_TX_VOUT_5000MV = 5000,
-	WC_TX_VOUT_5500MV = 5500,
-	WC_TX_VOUT_6000MV = 6000,
-	WC_TX_VOUT_6500MV = 6500,
-	WC_TX_VOUT_7000MV = 7000,
-	WC_TX_VOUT_7500MV = 7500,
-	WC_TX_VOUT_8000MV = 8000,
-	WC_TX_VOUT_8500MV = 8500,
-	WC_TX_VOUT_9000MV = 9000,
-	WC_TX_VOUT_MIN = WC_TX_VOUT_5000MV,
-	WC_TX_VOUT_MAX = WC_TX_VOUT_9000MV,
-	WC_TX_VOUT_STEP_AOV = 500,
-};
-
 enum sec_wireless_pad_id {
-	WC_PAD_ID_UNKNOWN	= 0x00,
+	WC_PAD_UNKNOWN = 0x00,
+
 	/* 0x01~1F : Single Port */
-	WC_PAD_ID_SNGL_NOBLE = 0x10,
-	WC_PAD_ID_SNGL_VEHICLE,
-	WC_PAD_ID_SNGL_MINI,
-	WC_PAD_ID_SNGL_ZERO,
-	WC_PAD_ID_SNGL_DREAM,
+	WC_PAD_HN930 = 0x11, /* Wireless Charger Vehicle */
+	WC_PAD_PG950_P = 0x14, /* Dream Convertible Pad mode */
+	WC_PAD_P1100 = 0x16, /* P1100 Pad mode */
+	WC_PAD_P1300, /* P1300 Pad Mode */
+	WC_PAD_P2400_P9500, /* P2400/P9500 FWC 1.0 Mode */
+
 	/* 0x20~2F : Multi Port */
+	WC_PAD_MULTI_PORT_START = 0x20,
+	WC_PAD_N6100 = 0x20, /* N6100 portrait mode */
+	WC_PAD_P4300 = 0x25, /* P4300 Pad mode */
+	WC_PAD_P5400_P = 0x27, /* P5400 Pad mode(left) */
+	WC_PAD_MULTI_PORT_END = 0x2F,
+
 	/* 0x30~3F : Stand Type */
-	WC_PAD_ID_STAND_HERO = 0x30,
-	WC_PAD_ID_STAND_DREAM,
+	WC_PAD_NG930 = 0x30, /* Wireless Charger Stand */
+	WC_PAD_PG950_S, /* Dream Convertible Stand mode */
+	WC_PAD_N3300_P = 0x35, /* N3300 portrait mode */
+
 	/* 0x40~4F : External Battery Pack */
-	WC_PAD_ID_EXT_BATT_PACK = 0x40,
-	WC_PAD_ID_EXT_BATT_PACK_TA,
-	/* 0x50~6F : Reserved */
-	WC_PAD_ID_UNO_TX = 0x72,
-	WC_PAD_ID_UNO_TX_B0 = 0x80,
-	WC_PAD_ID_UNO_TX_B1,
-	WC_PAD_ID_UNO_TX_B2,
-	WC_PAD_ID_UNO_TX_MAX = 0x9F,
-	WC_PAD_ID_AUTH_PAD = 0xA0,
-	WC_PAD_ID_DAVINCI_PAD_V,
-	WC_PAD_ID_DAVINCI_PAD_H,
-	WC_PAD_ID_AUTH_PAD_ACLASS_END = 0xAF,
-	WC_PAD_ID_AUTH_PAD_END = 0xBF,
-	/* reserved 0xA1 ~ 0xBF for auth pad */
-	WC_PAD_ID_MAX = 0xFF,
+	WC_PAD_BPACK_START = 0x40,
+	WC_PAD_U1200 = 0x42, /* U1200 Pad mode */
+	WC_PAD_U3300, /* U3300 Pad mode */
+	WC_PAD_BPACK_END = 0x4F,
+
+	/* 0x50~5F : Samsung Watch (Inbox) */
+	/* 0x60~6F : Reserved */
+	/* 0x70~7F : Samsung Watch (Universal pad) */
+	WC_PAD_PHONE_D2D = 0x72, /* Wireless Power Sharing mode(Same for Phone and Watch) */
+
+	/* 0x80~9F : Phone TRX */
+	WC_PAD_TX_B0 = 0x80, /* reserved for next TRX's */
+	WC_PAD_TX_MAX = 0x9F,
+
+	/* 0xA0~BF : Ultra Fast Charge */
+	WC_PAD_AUTH_PAD_START = 0xA0,
+	WC_PAD_P5200 = 0xA0, /* P5200 Ultra Pad mode (left) */
+	WC_PAD_N5200_P, /* N5200 portrait mode */
+	WC_PAD_N5200_L, /* N5200 landscape mode */
+	WC_PAD_P2400, /* P2400 Ultra Pad mode */
+	WC_PAD_P5400_UP, /* P5400 Ultra Pad mode(left) */
+	WC_PAD_AUTH_PAD_ACLASS_END = 0xAF,
+	WC_PAD_AUTH_PAD_END = 0xBF,
+
+	/* 0xC0~DF : Reserved */
+	/* 0xE0~EF : ETC */
+	WC_PAD_JIG = 0xED, /* FAC TX(for Booting) */
+	WC_PAD_FG = 0xEF, /* Galaxy Friends(Phone, Buds) */
+
+	/* 0xF0~FF : D1 Flicker */
+	WC_PAD_P3105 = 0xF0, /* P3105 Pad mode */
+	WC_PAD_N3300_L = 0xF2, /* N3300 landscape mode */
+	WC_PAD_MAX = 0xFF,
 };
+
+#define fan_ctrl_pad(pad_id) (\
+	(pad_id >= 0x14 && pad_id <= 0x1f) || \
+	(pad_id >= 0x25 && pad_id <= 0x2f) || \
+	(pad_id >= 0x30 && pad_id <= 0x3f) || \
+	(pad_id >= 0x46 && pad_id <= 0x4f) || \
+	(pad_id >= 0xa1 && pad_id <= 0xcf) || \
+	(pad_id >= 0xd0 && pad_id <= 0xff))
+
+#define opfreq_ctrl_pad(pad_id) (\
+	((pad_id >= WC_PAD_P3105) && (pad_id <= WC_PAD_MAX)) || \
+	((pad_id >= WC_PAD_N5200_P) && (pad_id <= WC_PAD_AUTH_PAD_ACLASS_END)) || \
+	(pad_id == WC_PAD_P1300) || \
+	(pad_id == WC_PAD_N3300_P) || \
+	(pad_id == WC_PAD_N3300_L) || \
+	(pad_id == WC_PAD_P4300))
+
+#define volt_ctrl_pad(pad_id) (\
+	(pad_id != WC_PAD_PG950_S) && \
+	(pad_id != WC_PAD_PG950_P))
+
+#define is_phm_supported_pad(pad_id) (\
+	(pad_id != WC_PAD_UNKNOWN) && \
+	(pad_id != WC_PAD_N3300_P) && \
+	(pad_id != WC_PAD_N3300_L) && \
+	(pad_id != WC_PAD_N5200_P) && \
+	(pad_id != WC_PAD_N5200_L) && \
+	(pad_id != WC_PAD_U1200) && \
+	(pad_id != WC_PAD_U3300))
+
+#define is_samsung_pad(vendor_id) (\
+	(vendor_id == 0x42))
+
+#define is_3rd_pad(vendor_id) (\
+	(vendor_id == 0x6E00) || \
+	(vendor_id == 0x0066))
 
 enum sec_battery_adc_channel {
 	SEC_BAT_ADC_CHANNEL_CABLE_CHECK = 0,
-	SEC_BAT_ADC_CHANNEL_BAT_CHECK,
+	SEC_BAT_ADC_CHANNEL_BATID_CHECK,
 	SEC_BAT_ADC_CHANNEL_TEMP,
 	SEC_BAT_ADC_CHANNEL_TEMP_AMBIENT,
 	SEC_BAT_ADC_CHANNEL_FULL_CHECK,
@@ -234,14 +302,16 @@ enum sec_battery_adc_channel {
 	SEC_BAT_ADC_CHANNEL_USB_TEMP,
 	SEC_BAT_ADC_CHANNEL_SUB_BAT_TEMP,
 	SEC_BAT_ADC_CHANNEL_BLKT_TEMP,
+	SEC_BAT_ADC_CHANNEL_DC_TEMP,
 	SEC_BAT_ADC_CHANNEL_NUM,
 };
 
 enum sec_battery_charge_mode {
 	SEC_BAT_CHG_MODE_BUCK_OFF = 0, /* buck, chg off */
+	SEC_BAT_CHG_MODE_BUCK_OFF_LINEAR_CHARGING, /* buck off, linear chg on */
 	SEC_BAT_CHG_MODE_CHARGING_OFF,
+	SEC_BAT_CHG_MODE_PASS_THROUGH,
 	SEC_BAT_CHG_MODE_CHARGING, /* buck, chg on */
-//	SEC_BAT_CHG_MODE_BUCK_ON,
 	SEC_BAT_CHG_MODE_OTG_ON,
 	SEC_BAT_CHG_MODE_OTG_OFF,
 	SEC_BAT_CHG_MODE_UNO_ON,
@@ -287,6 +357,17 @@ enum sec_battery_direct_charging_source_ctrl {
 	SEC_STORE_MODE = 0x4,
 };
 
+enum sec_battery_slate_mode {
+	SEC_SLATE_OFF = 0,
+	SEC_SLATE_MODE,
+	SEC_SMART_SWITCH_SLATE,
+	SEC_SMART_SWITCH_SRC,
+};
+
+extern const char *sb_rx_type_str(int type);
+extern const char *sb_vout_ctr_mode_str(int vout_mode);
+extern const char *sb_rx_vout_str(int vout);
+
 /* tx_event */
 #define BATT_TX_EVENT_WIRELESS_TX_STATUS		0x00000001
 #define BATT_TX_EVENT_WIRELESS_RX_CONNECT		0x00000002
@@ -324,6 +405,7 @@ enum sec_battery_direct_charging_source_ctrl {
 #define SEC_BAT_TX_RETRY_HIGH_TEMP		0x0010
 #define SEC_BAT_TX_RETRY_LOW_TEMP		0x0020
 #define SEC_BAT_TX_RETRY_OCP			0x0040
+#define SEC_BAT_TX_RETRY_AC_MISSING		0x0080
 
 /* ext_event */
 #define BATT_EXT_EVENT_NONE			0x00000000
@@ -363,7 +445,39 @@ enum tx_switch_mode_state {
 	TX_SWITCH_MODE_OFF = 0,
 	TX_SWITCH_CHG_ONLY,
 	TX_SWITCH_UNO_ONLY,
-	TX_SWITCH_UNO_FOR_GEAR,
+	TX_SWITCH_GEAR_PPS, /* temporary mode */
+};
+
+enum d2d_auth_type {
+	D2D_AUTH_NONE = 0,
+	D2D_AUTH_SRC,
+	D2D_AUTH_SNK,
+};
+
+enum d2d_mode {
+	HP_D2D_NONE = 0,
+	HP_D2D_ON,
+	HP_D2D_BATT_TMP,
+	HP_D2D_LRP_TMP,
+	HP_D2D_OCP,
+	HP_D2D_SOC,
+	HP_D2D_LCD,
+};
+
+enum {
+	RX_POWER_NONE,
+	RX_POWER_5W,
+	RX_POWER_7_5W,
+	RX_POWER_12W,
+	RX_POWER_15W,
+};
+
+enum mfc_phm_state {
+	NONE_PHM = 0,
+	EXIT_PHM,
+	ENTER_PHM,
+	FAILED_PHM,
+	END_PHM,
 };
 
 /* full check condition type (can be used overlapped) */
@@ -407,6 +521,15 @@ enum sec_battery_check {
   * (only for driver algorithm, can NOT be set by user)
   */
 #define SEC_FUELGAUGE_CAPACITY_TYPE_RESET	(-1)
+
+#if IS_ENABLED(CONFIG_DUAL_FUELGAUGE)
+ /* SEC_FUELGAUGE_CAPACITY_TYPE_RESET_SUB
+  * use capacity information to reset sub fuel gauge
+  * (only for driver algorithm, can NOT be set by user)
+  */
+#define SEC_FUELGAUGE_CAPACITY_TYPE_RESET_SUB	(-2)
+#endif
+
 /* SEC_FUELGAUGE_CAPACITY_TYPE_RAW
   * use capacity information from fuel gauge directly
   */
@@ -435,8 +558,9 @@ enum sec_battery_check {
 
 #define SEC_FUELGAUGE_CAPACITY_TYPE_LOST_SOC	0x40
 
+#define SEC_FUELGAUGE_CAPACITY_TYPE_REPCAP	0x80
+
 /* charger function settings (can be used overlapped) */
-#define sec_charger_functions_t unsigned int
 /* SEC_CHARGER_NO_GRADUAL_CHARGING_CURRENT
  * disable gradual charging current setting
  * SUMMIT:AICL, MAXIM:regulation loop
@@ -448,20 +572,38 @@ enum sec_battery_check {
  */
 #define SEC_CHARGER_MINIMUM_SIOP_CHARGING_CURRENT	2
 
-#if defined(CONFIG_BATTERY_AGE_FORECAST)
+#define SEC_BATTERY_CABLE_TYPE_FROM_MTK	1
+
+#if defined(CONFIG_TABLET_MODEL_CONCEPT) && !defined(CONFIG_SEC_FACTORY)
+#define SLOW_CHARGING_CURRENT_STANDARD          1000
+#else
+#define SLOW_CHARGING_CURRENT_STANDARD          400
+#endif
+
 typedef struct sec_age_data {
 	unsigned int cycle;
 	unsigned int float_voltage;
 	unsigned int recharge_condition_vcell;
 	unsigned int full_condition_vcell;
 	unsigned int full_condition_soc;
-} sec_age_data_t;
+#if defined(CONFIG_BATTERY_AGE_FORECAST_B2B)
+	unsigned int max_charging_current;
 #endif
+} sec_age_data_t;
 
 typedef struct {
 	unsigned int cycle;
 	unsigned int asoc;
 } battery_health_condition;
+
+#define is_ppde_wireless_type(cable_type) ( \
+	cable_type == SEC_BATTERY_CABLE_PREPARE_WIRELESS_20 || \
+	cable_type == SEC_BATTERY_CABLE_HV_WIRELESS_20_LIMIT || \
+	cable_type == SEC_BATTERY_CABLE_HV_WIRELESS_20)
+
+#define is_pwr_nego_wireless_type(cable_type) ( \
+	cable_type == SEC_BATTERY_CABLE_HV_WIRELESS_20 || \
+	cable_type == SEC_BATTERY_CABLE_WIRELESS_EPP)
 
 #define is_hv_wireless_type(cable_type) ( \
 	cable_type == SEC_BATTERY_CABLE_HV_WIRELESS || \
@@ -469,7 +611,8 @@ typedef struct {
 	cable_type == SEC_BATTERY_CABLE_HV_WIRELESS_20 || \
 	cable_type == SEC_BATTERY_CABLE_HV_WIRELESS_20_LIMIT || \
 	cable_type == SEC_BATTERY_CABLE_WIRELESS_HV_VEHICLE || \
-	cable_type == SEC_BATTERY_CABLE_WIRELESS_HV_PACK)
+	cable_type == SEC_BATTERY_CABLE_WIRELESS_HV_PACK || \
+	cable_type == SEC_BATTERY_CABLE_WIRELESS_EPP)
 
 #define is_nv_wireless_type(cable_type)	( \
 	cable_type == SEC_BATTERY_CABLE_WIRELESS || \
@@ -479,13 +622,20 @@ typedef struct {
 	cable_type == SEC_BATTERY_CABLE_WIRELESS_VEHICLE || \
 	cable_type == SEC_BATTERY_CABLE_PREPARE_WIRELESS_HV || \
 	cable_type == SEC_BATTERY_CABLE_PREPARE_WIRELESS_20 || \
-	cable_type == SEC_BATTERY_CABLE_WIRELESS_TX)
+	cable_type == SEC_BATTERY_CABLE_WIRELESS_TX || \
+	cable_type == SEC_BATTERY_CABLE_WIRELESS_EPP_NV)
 
-#define is_wireless_type(cable_type) \
-	(is_hv_wireless_type(cable_type) || is_nv_wireless_type(cable_type))
+#define is_wireless_type(cable_type) ( \
+	is_hv_wireless_type(cable_type) || \
+	is_nv_wireless_type(cable_type))
 
-#define is_wireless_fake_type(cable_type) \
-	(is_wireless_type(cable_type) || (cable_type == SEC_BATTERY_CABLE_WIRELESS_FAKE))
+#define is_wireless_fake_type(cable_type) ( \
+	cable_type == SEC_BATTERY_CABLE_WIRELESS_FAKE || \
+	cable_type == SEC_BATTERY_CABLE_WIRELESS_EPP_FAKE)
+
+#define is_wireless_all_type(cable_type) ( \
+	is_wireless_type(cable_type) || \
+	is_wireless_fake_type(cable_type))
 
 #define is_not_wireless_type(cable_type) ( \
 	cable_type != SEC_BATTERY_CABLE_WIRELESS && \
@@ -501,7 +651,9 @@ typedef struct {
 	cable_type != SEC_BATTERY_CABLE_PREPARE_WIRELESS_20 && \
 	cable_type != SEC_BATTERY_CABLE_HV_WIRELESS_20 && \
 	cable_type != SEC_BATTERY_CABLE_HV_WIRELESS_20_LIMIT && \
-	cable_type != SEC_BATTERY_CABLE_WIRELESS_HV_PACK)
+	cable_type != SEC_BATTERY_CABLE_WIRELESS_HV_PACK && \
+	cable_type != SEC_BATTERY_CABLE_WIRELESS_EPP && \
+	cable_type != SEC_BATTERY_CABLE_WIRELESS_EPP_NV)
 
 #define is_wired_type(cable_type) \
 	(is_not_wireless_type(cable_type) && (cable_type != SEC_BATTERY_CABLE_NONE) && \
@@ -521,6 +673,7 @@ typedef struct {
 	cable_type == SEC_BATTERY_CABLE_9V_ERR || \
 	cable_type == SEC_BATTERY_CABLE_9V_TA || \
 	cable_type == SEC_BATTERY_CABLE_9V_UNKNOWN || \
+	cable_type == SEC_BATTERY_CABLE_POGO_9V || \
 	cable_type == SEC_BATTERY_CABLE_QC20)
 
 #define is_hv_wire_12v_type(cable_type) ( \
@@ -535,20 +688,27 @@ typedef struct {
 	cable_type == SEC_BATTERY_CABLE_OTG || \
 	cable_type == SEC_BATTERY_CABLE_POWER_SHARING)
 
+
+#define chg_can_sleep_type(cable_type) ( \
+	!is_wired_type(cable_type) || cable_type == SEC_BATTERY_CABLE_TIMEOUT)
+
 #define is_slate_mode(battery) ((battery->current_event & SEC_BAT_CURRENT_EVENT_SLATE) \
 		== SEC_BAT_CURRENT_EVENT_SLATE)
 
 #define can_usb_suspend_type(cable_type) ( \
 	cable_type == SEC_BATTERY_CABLE_PDIC || \
+	cable_type == SEC_BATTERY_CABLE_FPDO_DC || \
 	cable_type == SEC_BATTERY_CABLE_PDIC_APDO || \
 	cable_type == SEC_BATTERY_CABLE_USB || \
 	cable_type == SEC_BATTERY_CABLE_USB_CDP)
 
 #define is_pd_wire_type(cable_type) ( \
 	cable_type == SEC_BATTERY_CABLE_PDIC || \
+	cable_type == SEC_BATTERY_CABLE_FPDO_DC || \
 	cable_type == SEC_BATTERY_CABLE_PDIC_APDO)
 
 #define is_pd_apdo_wire_type(cable_type) ( \
+	cable_type == SEC_BATTERY_CABLE_FPDO_DC || \
 	cable_type == SEC_BATTERY_CABLE_PDIC_APDO)
 
 #define is_pd_fpdo_wire_type(cable_type) ( \
@@ -556,6 +716,14 @@ typedef struct {
 
 #define is_hv_pdo_wire_type(cable_type, hv_pdo) ( \
 	(cable_type == SEC_BATTERY_CABLE_PDIC || \
+	cable_type == SEC_BATTERY_CABLE_FPDO_DC || \
 	cable_type == SEC_BATTERY_CABLE_PDIC_APDO) && \
 	hv_pdo)
+
+#define is_pogo_wire_type(cable_type) ( \
+	cable_type == SEC_BATTERY_CABLE_POGO || \
+	cable_type == SEC_BATTERY_CABLE_POGO_9V)
+
+#define is_wcin_type(cable_type) ( \
+	is_pogo_wire_type(cable_type) || is_wireless_type(cable_type))
 #endif /* __SEC_CHARGING_COMMON_H */

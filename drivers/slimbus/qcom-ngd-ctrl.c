@@ -1466,6 +1466,8 @@ static int qcom_slim_ngd_ctrl_probe(struct platform_device *pdev)
 	spin_lock_init(&ctrl->tx_buf_lock);
 	init_completion(&ctrl->reconf);
 	init_completion(&ctrl->qmi.qmi_comp);
+	init_completion(&ctrl->xfer_done);
+	init_completion(&ctrl->sync_done);
 
 	init_completion(&ctrl->xfer_done);
 	init_completion(&ctrl->sync_done);
