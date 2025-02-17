@@ -4586,7 +4586,6 @@ static ssize_t mode_store(struct device *dev, struct device_attribute *attr,
 	if (sysfs_streq(buf, "peripheral")) {
 		if (!dwc3_msm_role_allowed(mdwc, USB_ROLE_DEVICE))
 			return -EINVAL;
-		}
 
 #ifdef CONFIG_USB_NOTIFIER
 		if (is_blocked(get_otg_notify(), NOTIFY_BLOCK_TYPE_CLIENT)) {
