@@ -3,6 +3,7 @@ obj-$(CONFIG_DIRECT_CHARGING)			+= sec-direct-charger.o
 sec-direct-charger-$(CONFIG_DIRECT_CHARGING)	+= a73xq/sb_pass_through.o a73xq/sec_direct_charger.o
 else
 obj-$(CONFIG_DIRECT_CHARGING)			+= sec-direct-charger.o
+sec-direct-charger-$(CONFIG_DIRECT_CHARGING)	+= sec_direct_charger.o
 endif
 
 ccflags-y := -Wformat

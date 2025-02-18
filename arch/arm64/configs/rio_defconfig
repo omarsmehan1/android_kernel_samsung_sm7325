@@ -6366,7 +6366,7 @@ CONFIG_SEC_ABC_COMMON=y
 #
 # Samsung ABC Spec manager type1 options
 #
-# CONFIG_SEC_ABC_SPEC_TYPE1 is not set
+CONFIG_SEC_ABC_SPEC_TYPE1=y
 
 #
 # Samsung ABC MOTTO Options
