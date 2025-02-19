@@ -109,7 +109,7 @@ static int sdam_probe(struct platform_device *pdev)
 	unsigned int val = 0;
 	int rc;
 	unsigned int BOOT1_OFF_REASON = 0, BOOT1_FAULT_REASON1 = 0;
-	
+
 	sdam = devm_kzalloc(&pdev->dev, sizeof(*sdam), GFP_KERNEL);
 	if (!sdam)
 		return -ENOMEM;

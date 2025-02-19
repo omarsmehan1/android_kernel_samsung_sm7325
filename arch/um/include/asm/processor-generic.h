@@ -53,7 +53,7 @@ struct thread_struct {
 	.prev_sched		= NULL, \
 	.arch			= INIT_ARCH_THREAD, \
 	.request		= { 0 }, \
-	.is_running_test	= false, \
+	.is_running_test	= false \
 }
 
 static inline void release_thread(struct task_struct *task)

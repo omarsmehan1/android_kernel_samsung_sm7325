@@ -383,7 +383,7 @@ static int qti_flash_led_strobe(struct qti_flash_led *led,
 	} else {
 		for (i = 0; i < led->max_channels; i++)
 			if ((led->chan_en_map & BIT(i)) &&
-				(mask & BIT(i)) && !(value & BIT(i)))
+			    (mask & BIT(i)) && !(value & BIT(i)))
 				led->chan_en_map &= ~(BIT(i));
 
 		rc = qti_flash_led_masked_write(led, FLASH_EN_LED_CTRL,
