@@ -203,7 +203,6 @@ menu "Partition Types"
 
 source "block/partitions/Kconfig"
 
-
 endmenu
 
 endif # BLOCK
@@ -235,6 +234,5 @@ config BLOCK_SUPPORT_STLOG
 	default y
 config BLK_PM
 	def_bool BLOCK && PM
-
 
 source "block/Kconfig.iosched"

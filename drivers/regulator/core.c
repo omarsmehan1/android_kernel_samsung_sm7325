@@ -6240,16 +6240,16 @@ static int _regulator_debug_print_enabled(struct device *dev, void *data)
 		mode = rdev->desc->ops->get_mode(rdev);
 
 	if (uV != -EPERM && mode != -EPERM)
-		pr_info("  %s[%u] %d uV, mode=%d\n",
+		pr_info("%s[%u] %d uV, mode=%d\n",
 			rdev_get_name(rdev), rdev->use_count, uV, mode);
 	else if (uV != -EPERM)
-		pr_info("  %s[%u] %d uV\n",
+		pr_info("%s[%u] %d uV\n",
 			rdev_get_name(rdev), rdev->use_count, uV);
 	else if (mode != -EPERM)
-		pr_info("  %s[%u], mode=%d\n",
+		pr_info("%s[%u], mode=%d\n",
 			rdev_get_name(rdev), rdev->use_count, mode);
 	else
-		pr_info("  %s[%u]\n", rdev_get_name(rdev), rdev->use_count);
+		pr_info("%s[%u]\n", rdev_get_name(rdev), rdev->use_count);
 
 	enabled_reg_count++;
 
