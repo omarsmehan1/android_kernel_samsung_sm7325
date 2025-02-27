@@ -68,6 +68,12 @@
 #define tSwapSinkReady			(10)	/* 10 ms */
 #define tSrcRecover				(670)	/* 660~1000 ms */
 
+#define ALTERNATE_MODE_NOT_READY	(1 << 0)
+#define ALTERNATE_MODE_READY		(1 << 1)
+#define ALTERNATE_MODE_STOP			(1 << 2)
+#define ALTERNATE_MODE_START		(1 << 3)
+#define ALTERNATE_MODE_RESET		(1 << 4)
+
 typedef enum {
 	POWER_TYPE_FIXED = 0,
 	POWER_TYPE_BATTERY,
@@ -901,6 +907,9 @@ struct sm5714_usbpd_data {
 	int			thermal_state;
 	int			auth_type;
 	int			d2d_type;
+#ifndef CONFIG_DISABLE_LOCKSCREEN_USB_RESTRICTION
+	bool		altmode_enable;
+#endif
 	struct pdic_notifier_struct pd_noti;
 };
 
@@ -998,4 +1007,7 @@ extern int dwc3_restart_usb_host_mode_hs(void);
 #endif
 void sm5714_usbpd_turn_on_reverse_booster(struct sm5714_usbpd_data *pd_data);
 void sm5714_usbpd_turn_off_reverse_booster(struct sm5714_usbpd_data *pd_data);
+#ifndef CONFIG_DISABLE_LOCKSCREEN_USB_RESTRICTION
+void sm5714_set_enable_alternate_mode(int mode);
+#endif
 #endif
