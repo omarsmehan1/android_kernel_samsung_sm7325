@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -315,6 +316,7 @@ int32_t cam_context_config_dev_to_hw(
 			ctx->dev_name, ctx->ctx_id);
 		rc = -EFAULT;
 	}
+
 	cam_mem_put_cpu_buf((int32_t) cmd->packet_handle);
 	return rc;
 }
