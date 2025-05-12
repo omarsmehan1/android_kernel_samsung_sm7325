@@ -247,7 +247,7 @@ quiet_cmd_gzip = GZIP    $@
 # ---------------------------------------------------------------------------
 DTC ?= $(objtree)/scripts/dtc/dtc
 
-# Silence warnings
+# Silence all DTC warnings by default
 DTC_FLAGS += -q
 
 # Disable noisy checks by default

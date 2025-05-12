@@ -338,7 +338,7 @@ void quest_sync_param_api_gpio_test_result(void)
 }
 
 #ifdef CONFIG_SEC_QUEST_BPS_CLASSIFIER
-void quest_load_param_quest_bps_data()
+void quest_load_param_quest_bps_data(void)
 {
 	if (!sec_get_param(param_index_quest_bps_data, &bps_envs))
 		QUEST_PRINT("%s : failed\n", __func__);
@@ -346,7 +346,7 @@ void quest_load_param_quest_bps_data()
 		QUEST_PRINT("%s : succeeded\n", __func__);
 }
 
-void quest_sync_param_quest_bps_data()
+void quest_sync_param_quest_bps_data(void)
 {
 	if (!sec_set_param(param_index_quest_bps_data, &bps_envs))
 		QUEST_PRINT("%s : failed\n", __func__);

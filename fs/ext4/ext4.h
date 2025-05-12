@@ -629,6 +629,7 @@ enum {
  */
 #define EXT4_EX_NOCACHE				0x40000000
 #define EXT4_EX_FORCE_CACHE			0x20000000
+#define EXT4_EX_NOFAIL				0x10000000
 
 /*
  * Flags used by ext4_free_blocks
@@ -1517,7 +1518,7 @@ struct ext4_sb_info {
 	struct task_struct *s_mmp_tsk;
 
 	/* record the last minlen when FITRIM is called. */
-	atomic_t s_last_trim_minblks;
+	unsigned long s_last_trim_minblks;
 
 	/* Reference to checksum algorithm driver via cryptoapi */
 	struct crypto_shash *s_chksum_driver;
@@ -2915,12 +2916,6 @@ static inline int ext4_has_metadata_csum(struct super_block *sb)
 	return ext4_has_feature_metadata_csum(sb) &&
 	       (EXT4_SB(sb)->s_chksum_driver != NULL);
 }
-
-extern void print_iloc_info(struct super_block *sb, struct ext4_iloc iloc);
-extern void print_bh(struct super_block *sb,
-		struct buffer_head *bh, int start, int len);
-extern void print_block_data(struct super_block *sb, sector_t blocknr,
-		unsigned char *data_to_dump, int start, int len);
 
 static inline int ext4_has_group_desc_csum(struct super_block *sb)
 {

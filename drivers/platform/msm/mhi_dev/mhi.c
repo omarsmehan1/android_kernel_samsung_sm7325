@@ -2278,6 +2278,12 @@ static int mhi_dev_process_tre_ring(struct mhi_dev *mhi,
 	ch = &mhi->ch[ring->id - mhi->ch_ring_start];
 	reason.ch_id = ch->ch_id;
 	reason.reason = MHI_DEV_TRE_AVAILABLE;
+	/*
+	 * Save lowest value of tre_len to split packets in UCI layer
+	 * for write request of size more than tre_len.
+	 */
+	if (!ch->tre_size || ch->tre_size > el->tre.len)
+		ch->tre_size = el->tre.len;
 
 	/* Invoke a callback to let the client know its data is ready.
 	 * Copy this event to the clients context so that it can be
@@ -3183,6 +3189,7 @@ static int mhi_dev_alloc_evt_buf_evt_req(struct mhi_dev *mhi,
 {
 	int rc;
 	uint32_t size, i;
+	struct event_req *req, *tmp;
 
 	size = mhi_dev_get_evt_ring_size(mhi, ch->ch_id);
 
@@ -3201,7 +3208,14 @@ static int mhi_dev_alloc_evt_buf_evt_req(struct mhi_dev *mhi,
 	 * they were allocated with a different size
 	 */
 	if (ch->evt_buf_size) {
-		kfree(ch->ereqs);
+		list_for_each_entry_safe(req, tmp, &ch->event_req_buffers, list) {
+			list_del(&req->list);
+			kfree(req);
+		}
+		list_for_each_entry_safe(req, tmp, &ch->flush_event_req_buffers, list) {
+			list_del(&req->list);
+			kfree(req);
+		}
 		kfree(ch->tr_events);
 	}
 	/*
@@ -3215,14 +3229,8 @@ static int mhi_dev_alloc_evt_buf_evt_req(struct mhi_dev *mhi,
 	mhi_log(MHI_MSG_INFO,
 		"ch_id:%d evt buf size is %d\n", ch->ch_id, ch->evt_buf_size);
 
-	/* Allocate event requests */
-	ch->ereqs = kcalloc(ch->evt_req_size, sizeof(*ch->ereqs), GFP_KERNEL);
-	if (!ch->ereqs) {
-		mhi_log(MHI_MSG_ERROR,
-			"Failed to alloc ereqs for ch_id:%d\n", ch->ch_id);
-		rc = -ENOMEM;
-		goto free_ereqs;
-	}
+	INIT_LIST_HEAD(&ch->event_req_buffers);
+	INIT_LIST_HEAD(&ch->flush_event_req_buffers);
 
 	/* Allocate buffers to queue transfer completion events */
 	ch->tr_events = kcalloc(ch->evt_buf_size, sizeof(*ch->tr_events),
@@ -3235,11 +3243,13 @@ static int mhi_dev_alloc_evt_buf_evt_req(struct mhi_dev *mhi,
 		goto free_ereqs;
 	}
 
-	/* Organize event flush requests into a linked list */
-	INIT_LIST_HEAD(&ch->event_req_buffers);
-	INIT_LIST_HEAD(&ch->flush_event_req_buffers);
-	for (i = 0; i < ch->evt_req_size; ++i)
-		list_add_tail(&ch->ereqs[i].list, &ch->event_req_buffers);
+	/* Allocate event requests */
+	for (i = 0; i < ch->evt_req_size; ++i) {
+		req = kzalloc(sizeof(struct event_req), GFP_KERNEL);
+		if (!req)
+			goto free_ereqs;
+		list_add_tail(&req->list, &ch->event_req_buffers);
+	}
 
 	ch->curr_ereq =
 		container_of(ch->event_req_buffers.next,
@@ -3257,8 +3267,13 @@ static int mhi_dev_alloc_evt_buf_evt_req(struct mhi_dev *mhi,
 	return 0;
 
 free_ereqs:
-	kfree(ch->ereqs);
-	ch->ereqs = NULL;
+	if (!list_empty(&ch->event_req_buffers)) {
+		list_for_each_entry_safe(req, tmp, &ch->event_req_buffers, list) {
+			list_del(&req->list);
+			kfree(req);
+		}
+	}
+	kfree(ch->tr_events);
 	ch->evt_buf_size = 0;
 	ch->evt_req_size = 0;
 
@@ -3466,7 +3481,7 @@ int mhi_dev_read_channel(struct mhi_req *mreq)
 	uint64_t read_from_loc;
 	ssize_t bytes_read = 0;
 	size_t write_to_loc = 0;
-	uint32_t usr_buf_remaining;
+	uint32_t usr_buf_remaining, tre_size;
 	int td_done = 0, rc = 0;
 	struct mhi_dev_client *handle_client;
 
@@ -3509,10 +3524,9 @@ int mhi_dev_read_channel(struct mhi_req *mreq)
 		}
 
 		el = &ring->ring_cache[ring->rd_offset];
-		mhi_log(MHI_MSG_VERBOSE, "evtptr : 0x%llx\n",
-						el->tre.data_buf_ptr);
-		mhi_log(MHI_MSG_VERBOSE, "evntlen : 0x%x, offset:%lu\n",
-						el->tre.len, ring->rd_offset);
+		mhi_log(MHI_MSG_VERBOSE,
+				"TRE.PTR: 0x%llx, TRE.LEN: 0x%x, rd offset: %lu\n",
+				el->tre.data_buf_ptr, el->tre.len, ring->rd_offset);
 
 		if (ch->tre_loc) {
 			bytes_to_read = min(usr_buf_remaining,
@@ -3531,17 +3545,15 @@ int mhi_dev_read_channel(struct mhi_req *mreq)
 
 
 			ch->tre_loc = el->tre.data_buf_ptr;
-			ch->tre_size = el->tre.len;
-			ch->tre_bytes_left = ch->tre_size;
-
-			mhi_log(MHI_MSG_VERBOSE,
-			"user_buf_remaining %d, ch->tre_size %d\n",
-			usr_buf_remaining, ch->tre_size);
-			bytes_to_read = min(usr_buf_remaining, ch->tre_size);
+			tre_size = el->tre.len;
+			ch->tre_bytes_left = el->tre.len;
+			mhi_log(MHI_MSG_VERBOSE, "user_buf_remaining %d, tre_size %d\n",
+					usr_buf_remaining, el->tre.len);
+			bytes_to_read = min(usr_buf_remaining, tre_size);
 		}
 
 		bytes_read += bytes_to_read;
-		addr_offset = ch->tre_size - ch->tre_bytes_left;
+		addr_offset = el->tre.len - ch->tre_bytes_left;
 		read_from_loc = ch->tre_loc + addr_offset;
 		write_to_loc = (size_t) mreq->buf +
 			(mreq->len - usr_buf_remaining);
