@@ -196,6 +196,7 @@ struct et5xx_data {
 	int detect_threshold;
 	bool finger_on;
 	const char *chipid;
+	const char *sensor_position;
 	bool ldo_enabled;
 	unsigned int orient;
 	int reset_count;

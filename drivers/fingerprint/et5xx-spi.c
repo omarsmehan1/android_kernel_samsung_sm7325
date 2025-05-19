@@ -815,6 +815,12 @@ static int et5xx_parse_dt(struct device *dev, struct et5xx_data *etspi)
 	}
 	pr_info("chipid: %s\n", etspi->chipid);
 
+	if (of_property_read_string_index(np, "etspi-position", 0,
+			(const char **)&etspi->sensor_position)) {
+		etspi->sensor_position = "NA";
+	}
+	pr_info("position: %s\n", etspi->sensor_position);
+
 	if (of_property_read_u32(np, "etspi-orient", &etspi->orient))
 		etspi->orient = 0;
 	pr_info("orient: %d\n", etspi->orient);
@@ -984,6 +990,14 @@ static ssize_t name_show(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "%s\n", etspi->chipid);
 }
 
+static ssize_t position_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct et5xx_data *etspi = dev_get_drvdata(dev);
+
+	return snprintf(buf, PAGE_SIZE, "%s\n", etspi->sensor_position);
+}
+
 static ssize_t adm_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -1036,6 +1050,7 @@ static DEVICE_ATTR_RO(bfs_values);
 static DEVICE_ATTR_RO(type_check);
 static DEVICE_ATTR_RO(vendor);
 static DEVICE_ATTR_RO(name);
+static DEVICE_ATTR_RO(position);
 static DEVICE_ATTR_RO(adm);
 static DEVICE_ATTR_RW(intcnt);
 static DEVICE_ATTR_RW(resetcnt);
@@ -1045,6 +1060,7 @@ static struct device_attribute *fp_attrs[] = {
 	&dev_attr_type_check,
 	&dev_attr_vendor,
 	&dev_attr_name,
+	&dev_attr_position,
 	&dev_attr_adm,
 	&dev_attr_intcnt,
 	&dev_attr_resetcnt,
