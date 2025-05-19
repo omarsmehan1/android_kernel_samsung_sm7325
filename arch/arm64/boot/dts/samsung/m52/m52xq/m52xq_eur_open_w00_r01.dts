@@ -637,6 +637,7 @@
 					etspi-sleepPin = <0xffffffff 0x23 0x0>;
 					etspi-drdyPin = <0xffffffff 0x3c 0x0>;
 					etspi-chipid = "ET523";
+					etspi-position = "53.45,13.25";
 					etspi-orient = <0x2>;
 				};
 
