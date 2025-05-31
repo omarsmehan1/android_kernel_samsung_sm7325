@@ -555,7 +555,6 @@
 					battery,enable_sysovlo_irq;
 					battery,enable_noise_wa;
 					battery,standard_curr = <0xd7a>;
-					battery,slowcharging_usb_bootcomplete;
 					battery,support_vpdo;
 					phandle = <0x9a>;
 				};

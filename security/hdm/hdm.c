@@ -35,7 +35,81 @@
 #include <linux/qtee_shmbridge.h>
 #endif
 
-static ssize_t store_hdm_policy(struct device *dev,
+#include "hdm_log.h"
+
+static int is_hdm_initialized;
+static u64 supported_subsystem;
+
+int hdm_log_level = HDM_LOG_LEVEL;
+
+static uint32_t hdm_blocked_bit;
+
+bool hdm_is_applied(uint32_t bit)
+{
+	if ((hdm_blocked_bit & bit)!= 0)
+		return true;
+	else
+		return false;
+}
+EXPORT_SYMBOL(hdm_is_applied);
+
+void hdm_printk(int level, const char *fmt, ...)
+{
+	struct va_format vaf;
+	va_list args;
+
+	if (hdm_log_level < level)
+		return;
+
+	va_start(args, fmt);
+
+	vaf.fmt = fmt;
+	vaf.va = &args;
+
+	printk(KERN_INFO "%s %pV", TAG, &vaf);
+
+	va_end(args);
+}
+
+static int __init hdm_flag_setup(char *hdm_status)
+{
+	char tmp_hdm_status[100] = {0};
+	char *tmp_p = NULL;
+	char *token = NULL;
+	int cnt = 0;
+	long val = 0;
+	int err = 0;
+
+	hdm_blocked_bit = 0;
+
+	hdm_info("%s androidboot.hdm_status = %s\n", __func__, hdm_status);
+
+	if (hdm_status) {
+		snprintf(tmp_hdm_status, sizeof(tmp_hdm_status), "%s", hdm_status);
+
+		tmp_p = tmp_hdm_status;
+
+		token = strsep(&tmp_p, "&|");
+
+		while (token) {
+			//even = hdm applied bit
+			if (cnt++%2) {
+				err = kstrtol(token, 16, &val);
+				if (err)
+					return err;
+				hdm_blocked_bit = hdm_blocked_bit | val;
+			}
+			token = strsep(&tmp_p, "&|");
+		}
+	}
+
+	hdm_info("%s hdm_blocked_status = 0x%x\n", __func__, hdm_blocked_bit);
+
+	return 0;
+}
+early_param("androidboot.hdm_status", hdm_flag_setup);
+
+static ssize_t hdm_policy_store(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t count)
 {
@@ -43,7 +117,7 @@ static ssize_t store_hdm_policy(struct device *dev,
 	int c, p;
 
 	if (count == 0) {
-		pr_err("%s count = 0\n", __func__);
+		hdm_err("%s count = 0\n", __func__);
 		goto error;
 	}
 
@@ -52,23 +126,28 @@ static ssize_t store_hdm_policy(struct device *dev,
 	};
 
 	if (mode > HDM_CMD_MAX) {
-		pr_err("%s command size max fail. %d\n", __func__, mode);
+		hdm_err("%s command size max fail. %d\n", __func__, mode);
 		goto error;
 	}
-	pr_info("%s: command id: 0x%x\n", __func__, (int)mode);
+	hdm_info("%s: command id: 0x%x\n", __func__, (int)mode);
 
 	c = (int)(mode & HDM_C_BITMASK);
 	p = (int)(mode & HDM_P_BITMASK);
 
-	pr_info("%s m:0x%x c:0x%x p:0x%x\n", __func__, (int)mode, c, p);
+	hdm_info("%s m:0x%x c:0x%x p:0x%x\n", __func__, (int)mode, c, p);
 	switch (c) {
+	case HDM_FLAG_UPDATE:
+		hdm_info("%s HDM_FLAG_UPDATE 0x%x\n", __func__, p);
+		hdm_blocked_bit = p;
+		hdm_info("hdm_blocked_status = 0x%x\n", hdm_blocked_bit);
+		break;
 #if defined(CONFIG_ARCH_QCOM)
 	case HDM_HYP_CALL:
-		pr_info("%s HDM_HYP_CALL\n", __func__);
+		hdm_info("%s HDM_HYP_CALL\n", __func__);
 		uh_call(UH_APP_HDM, 9, 0, p, 0, 0);
 		break;
 	case HDM_HYP_CALLP:
-		pr_info("%s HDM_HYP_CALLP\n", __func__);
+		hdm_info("%s HDM_HYP_CALLP\n", __func__);
 		uh_call(UH_APP_HDM, 2, 0, p, 0, 0);
 		break;
 #endif
@@ -78,7 +157,79 @@ static ssize_t store_hdm_policy(struct device *dev,
 error:
 	return count;
 }
-static DEVICE_ATTR(hdm_policy, 0220, NULL, store_hdm_policy);
+
+static void get_supported_subsystem(void)
+{
+	if (is_hdm_initialized != true) {
+		uh_call(UH_APP_HDM, HDM_GET_SUPPORTED_SUBSYSTEM, (u64)&supported_subsystem, 0, 0, 0);
+		hdm_info("supported_subsystem = %012llx\n", supported_subsystem);
+		is_hdm_initialized = true;
+	}
+}
+
+static ssize_t hdm_subsystem_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	u32 hdm_version = 0;
+
+	hdm_info("%s\n", __func__);
+
+	get_supported_subsystem();
+
+	hdm_version = (supported_subsystem >> 12) & 0xFFF;
+	hdm_info("hdm_version = %03x\n", hdm_version);
+
+	return snprintf(buf, 7, "0x%03x\n", hdm_version);
+}
+
+static ssize_t pad_subsystem_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	u32 pad_version = 0;
+
+	hdm_info("%s\n", __func__);
+
+	get_supported_subsystem();
+
+	pad_version = supported_subsystem & 0xFFF;
+	hdm_info("pad_version = %03x\n", pad_version);
+
+	return snprintf(buf, 7, "0x%03x\n", pad_version);
+}
+
+static ssize_t bt_block_sub_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	u32 bt_block_sub = 0;
+
+	hdm_info("%s\n", __func__);
+
+	get_supported_subsystem();
+
+	bt_block_sub = (supported_subsystem >> 24) & 0xFFF;
+	hdm_info("bt_block_sub = %03x\n", bt_block_sub);
+
+	return snprintf(buf, 7, "0x%03x\n", bt_block_sub);
+}
+static ssize_t bt_unblock_sub_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	u32 bt_unblock_sub = 0;
+
+	hdm_info("%s\n", __func__);
+
+	get_supported_subsystem();
+
+	bt_unblock_sub = (supported_subsystem >> 36) & 0xFFF;
+	hdm_info("bt_unblock_sub = %03x\n", bt_unblock_sub);
+
+	return snprintf(buf, 7, "0x%03x\n", bt_unblock_sub);
+}
+static DEVICE_ATTR_WO(hdm_policy);
+static DEVICE_ATTR_RO(hdm_subsystem);
+static DEVICE_ATTR_RO(pad_subsystem);
+static DEVICE_ATTR_RO(bt_block_sub);
+static DEVICE_ATTR_RO(bt_unblock_sub);
 
 #if defined(CONFIG_ARCH_QCOM)
 static uint64_t qseelog_shmbridge_handle;
@@ -98,24 +249,24 @@ static int __init __hdm_init_of(void)
 	int dest_vmids[1] = {VMID_CP_BITSTREAM};
 	int dest_perms[1] = {PERM_READ | PERM_WRITE};
 
-	pr_info("%s start\n", __func__);
+	hdm_info("%s start\n", __func__);
 
 	node = of_find_node_by_name(NULL, "samsung,sec_hdm");
 	if (!node) {
-		pr_err("%s failed of_find_node_by_name\n", __func__);
+		hdm_err("failed of_find_node_by_name\n");
 		return -ENODEV;
 	}
 
 	node = of_parse_phandle(node, "memory-region", 0);
 	if (!node) {
-		pr_err("%s no memory-region specified\n", __func__);
+		hdm_err("no memory-region specified\n");
 		return -EINVAL;
 	}
 
 
 	ret = of_address_to_resource(node, 0, &r);
 	if (ret) {
-		pr_err("%s failed of_address_to_resource\n", __func__);
+		hdm_err("failed of_address_to_resource\n");
 		return ret;
 	}
 
@@ -125,15 +276,15 @@ static int __init __hdm_init_of(void)
 	ret = qtee_shmbridge_register(addr, size, ns_vmids, ns_vm_perms,
 			ns_vm_nums, PERM_READ | PERM_WRITE, &qseelog_shmbridge_handle);
 	if (ret)
-		pr_err("%s failed to create bridge for qsee_log buffer\n", __func__);
+		hdm_err("failed to create bridge for qsee_log buffer\n");
 
 	ret = hyp_assign_phys(addr, size, src_vmids, 1, dest_vmids, dest_perms, 1);
 	if (ret) {
-		pr_err("%s failed for %pa address of size %zx rc:%d\n",
+		hdm_err("%s: failed for %pa address of size %zx rc:%d\n",
 				__func__, &addr, size, ret);
 	}
 
-	pr_info("%s done.\n", __func__);
+	hdm_info("%s done\n", __func__);
 	return 0;
 }
 #endif
@@ -144,13 +295,40 @@ static int __init hdm_test_init(void)
 #if defined(CONFIG_ARCH_QCOM)
 	int err;
 #endif
+
+	supported_subsystem = 0;
+
 	dev = sec_device_create(NULL, "hdm");
 	WARN_ON(!dev);
-	if (IS_ERR(dev))
-		pr_err("%s Failed to create devce\n", __func__);
+	if (IS_ERR(dev)) {
+		hdm_err("%s Failed to create devce\n", __func__);
+		return 0;
+	}
 
-	if (device_create_file(dev, &dev_attr_hdm_policy) < 0)
-		pr_err("%s Failed to create device file\n", __func__);
+	if (device_create_file(dev, &dev_attr_hdm_policy) < 0) {
+		hdm_err("%s Failed to create device file\n", __func__);
+		return 0;
+	}
+
+	if (device_create_file(dev, &dev_attr_hdm_subsystem) < 0) {
+		hdm_err("%s Failed to create device file\n", __func__);
+		return 0;
+	}
+
+	if (device_create_file(dev, &dev_attr_pad_subsystem) < 0) {
+		hdm_err("%s Failed to create device file\n", __func__);
+		return 0;
+	}
+
+	if (device_create_file(dev, &dev_attr_bt_block_sub) < 0) {
+		hdm_err("%s Failed to create device file\n", __func__);
+		return 0;
+	}
+
+	if (device_create_file(dev, &dev_attr_bt_unblock_sub) < 0) {
+		hdm_err("%s Failed to create device file\n", __func__);
+		return 0;
+	}
 
 #if defined(CONFIG_ARCH_QCOM)
 	err = __hdm_init_of();
@@ -158,7 +336,7 @@ static int __init hdm_test_init(void)
 		return err;
 #endif
 
-	pr_info("%s done.\n", __func__);
+	hdm_info("%s end\n", __func__);
 	return 0;
 }
 

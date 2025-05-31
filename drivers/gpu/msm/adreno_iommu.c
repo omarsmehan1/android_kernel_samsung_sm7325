@@ -403,6 +403,7 @@ int adreno_iommu_set_pt_ctx(struct adreno_ringbuffer *rb,
 	unsigned int *cmds = NULL, count = 0;
  	int result = 0;
  
+
 	cmds = kmalloc(PAGE_SIZE, GFP_KERNEL);
 	if (cmds == NULL)
 		return -ENOMEM;
@@ -415,6 +416,7 @@ int adreno_iommu_set_pt_ctx(struct adreno_ringbuffer *rb,
 		/* Add commands for pagetable switch */
 		if (new_pt != cur_pt)
 			count += adreno_iommu_set_pt_generate_cmds(rb, cmds, new_pt);
+
 	}
 
 	/* Add commands to set the current context in memstore */

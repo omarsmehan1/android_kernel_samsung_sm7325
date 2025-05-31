@@ -1481,10 +1481,13 @@ static void dp_ctrl_stream_off(struct dp_ctrl *dp_ctrl, struct dp_panel *panel)
 }
 
 #ifdef SECDP_OPTIMAL_LINK_RATE
-static u32 secdp_check_link_clk(struct dp_panel *dp_panel, u32 link_rate)
+#define RES_1920X1080	2073600
+#define RES_2560X1440	3686400
+static bool ps176_high_refresh_rate_check(struct dp_panel *dp_panel)
 {
 	struct dp_panel_info *max_timing;
-	u32 ret_link_rate = link_rate;
+	int max_resolution;
+	bool ret = false;
 
 	if (!secdp_adapter_check_parade())
 		goto end;
@@ -1492,32 +1495,24 @@ static u32 secdp_check_link_clk(struct dp_panel *dp_panel, u32 link_rate)
 	if (!secdp_adapter_check_ps176())
 		goto end;
 
-	if (dp_panel->link_info.num_lanes < 4)
-		goto end;
-
 	max_timing = &dp_panel->max_timing_info;
+	max_resolution = max_timing->h_active * max_timing->v_active;
 
-	DP_INFO("lane_count:%d max:%ux%u@%uhz\n", dp_panel->link_info.num_lanes,
-		max_timing->h_active, max_timing->v_active,
-		max_timing->refresh_rate);
-
-	if (max_timing->h_active == 1920 &&
-			max_timing->v_active == 1080 &&
-			max_timing->refresh_rate == 144) {
-		DP_INFO("needs link_rate <%u> up\n", link_rate);
-
-		if (link_rate == 162000)
-			ret_link_rate = 270000;
-		else if (link_rate == 270000)
-			ret_link_rate = 540000;
-#ifndef SECDP_MAX_HBR2
-		else if (link_rate == 540000)
-			ret_link_rate = 810000;
-#endif
+	if (max_resolution >= RES_1920X1080 &&
+			max_timing->refresh_rate > 110 &&
+			max_timing->pixel_clk_khz > 250000) {
+		ret = true;
+	} else if (max_resolution >= RES_2560X1440 &&
+			max_timing->refresh_rate > 75 &&
+			max_timing->pixel_clk_khz > 300000) {
+		ret = true;
 	}
 
+	DP_INFO("[ps176] max %ux%u@%uhz, pclk %uKhz, %d\n",
+		max_timing->h_active, max_timing->v_active,
+		max_timing->refresh_rate, max_timing->pixel_clk_khz, ret);
 end:
-	return ret_link_rate;
+	return ret;
 }
 
 static u32 secdp_dp_gen_link_clk(struct dp_panel *dp_panel)
@@ -1530,7 +1525,7 @@ static u32 secdp_dp_gen_link_clk(struct dp_panel *dp_panel)
 	calc_link_rate = 540000;
 #endif
 
-	if (!dp_panel)
+	if (!dp_panel || ps176_high_refresh_rate_check(dp_panel))
 		goto end;
 
 	min_link_rate = dp_panel->get_min_req_link_rate(dp_panel);
@@ -1549,8 +1544,6 @@ static u32 secdp_dp_gen_link_clk(struct dp_panel *dp_panel)
 #endif
 	else
 		DP_ERR("too big!, set default\n");
-
-	calc_link_rate = secdp_check_link_clk(dp_panel, calc_link_rate);
 
 	DP_INFO("min_link_rate <%u>, calc_link_rate <%u>\n",
 		min_link_rate, calc_link_rate);

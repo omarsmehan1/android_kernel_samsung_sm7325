@@ -224,7 +224,7 @@ static int32_t cam_mem_get_slot(void)
 	
 	for (idx = 0; idx < CAM_MEM_BUFQ_MAX; idx++)
 	{
-		CAM_INFO(CAM_MEM,
+		CAM_DBG(CAM_MEM,
 		"Ion buf at idx = %d  fd = %d, imported %d, dma_buf %pK len = %d is_active = %d",
 		idx, tbl.bufq[idx].fd,
 		tbl.bufq[idx].is_imported,
@@ -243,7 +243,7 @@ static int32_t cam_mem_get_slot(void)
 	mutex_init(&tbl.bufq[idx].q_lock);
 	mutex_unlock(&tbl.m_lock);
 	
-	CAM_INFO(CAM_MEM,
+	CAM_DBG(CAM_MEM,
 		"Ion buf at idx = %d  fd = %d, imported %d, dma_buf %pK len = %d is_active = %d",
 		idx, tbl.bufq[idx].fd,
 		tbl.bufq[idx].is_imported,
@@ -258,7 +258,7 @@ static void cam_mem_put_slot(int32_t idx)
 {
 	mutex_lock(&tbl.m_lock);
 	mutex_lock(&tbl.bufq[idx].q_lock);
-	CAM_INFO(CAM_MEM,
+	CAM_DBG(CAM_MEM,
 		"Ion buf at idx = %d freeing fd = %d, imported %d, dma_buf %pK len = %d",
 		idx, tbl.bufq[idx].fd,
 		tbl.bufq[idx].is_imported,
@@ -1125,7 +1125,7 @@ static void cam_mem_util_unmap(struct kref *kref)
 
 	CAM_DBG(CAM_MEM, "Flags = %X idx %d", tbl.bufq[idx].flags, idx);
 	client = tbl.bufq[idx].smmu_mapping_client;
-	CAM_INFO(CAM_MEM, "Flags = %X idx %d is_active = %d", tbl.bufq[idx].flags, idx, tbl.bufq[idx].active);
+	CAM_DBG(CAM_MEM, "Flags = %X idx %d is_active = %d", tbl.bufq[idx].flags, idx, tbl.bufq[idx].active);
 
 	mutex_lock(&tbl.m_lock);
 	if ((!tbl.bufq[idx].active) &&
@@ -1180,7 +1180,7 @@ static void cam_mem_util_unmap(struct kref *kref)
 	memset(tbl.bufq[idx].hdls, 0,
 		sizeof(int32_t) * CAM_MEM_MMU_MAX_HANDLE);
 
-	CAM_INFO(CAM_MEM,
+	CAM_DBG(CAM_MEM,
 		"Ion buf at idx = %d freeing fd = %d, imported %d, dma_buf %pK len = %d",
 		idx, tbl.bufq[idx].fd,
 		tbl.bufq[idx].is_imported,

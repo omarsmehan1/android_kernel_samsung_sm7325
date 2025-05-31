@@ -31,6 +31,10 @@
 #include <linux/soc/qcom/smem.h>
 #include <linux/kthread.h>
 
+#ifdef HDM_SUPPORT
+#include <linux/hdm.h>
+#endif
+
 #include <linux/uaccess.h>
 #include <asm/setup.h>
 #define CREATE_TRACE_POINTS
@@ -389,6 +393,10 @@ static int pil_do_minidump(struct pil_desc *desc, void *ramdump_dev)
 		pil_err(desc, "%s: Minidump collection failed for subsys %s rc:%d\n",
 			__func__, desc->name, ret);
 
+#ifdef CONFIG_QGKI_MSM_BOOT_TIME_MARKER
+	if (!strcmp(desc->name, "modem"))
+		update_marker("M - Modem Dump completed");
+#endif
 	if (desc->subsys_vmid > 0)
 		ret = pil_assign_mem_to_subsys(desc, priv->region_start,
 			(priv->region_end - priv->region_start));
@@ -1372,7 +1380,11 @@ err_auth_and_reset:
 #if IS_ENABLED(CONFIG_SEC_PERIPHERAL_SECURE_CHK)
 	if (IS_ENABLED(CONFIG_SEC_PERIPHERAL_SECURE_CHK) &&
 			secure_check_fail && (ret == -EINVAL) &&
+#ifdef HDM_SUPPORT
+			(!strcmp(desc->name, "mba") || (!strcmp(desc->name, "modem") && !hdm_is_applied(HDM_CP))))
+#else
 			(!strcmp(desc->name, "mba") || !strcmp(desc->name, "modem")))
+#endif
 		sec_peripheral_secure_check_fail();
 #endif
 	if (ret && desc->subsys_vmid > 0) {
@@ -1409,7 +1421,11 @@ out:
 #if IS_ENABLED(CONFIG_SEC_PERIPHERAL_SECURE_CHK)
 		if (IS_ENABLED(CONFIG_SEC_PERIPHERAL_SECURE_CHK) &&
 				secure_check_fail && (ret == -EINVAL) &&
+#ifdef HDM_SUPPORT
+				(!strcmp(desc->name, "mba") || (!strcmp(desc->name, "modem") && !hdm_is_applied(HDM_CP))))
+#else
 				(!strcmp(desc->name, "mba") || !strcmp(desc->name, "modem")))
+#endif
 			sec_peripheral_secure_check_fail();
 #endif
 	}

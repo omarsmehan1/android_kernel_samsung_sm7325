@@ -192,6 +192,8 @@ obj-$(CONFIG_COUNTER)		+= counter/
 # uH
 obj-$(CONFIG_UH)		+= uh/
 
+obj-y				+= knox/
+
 obj-y				+= switch/
 obj-$(CONFIG_SENSORS_SSC)	+= sensors/
 obj-$(CONFIG_ADSP_FACTORY)      += adsp_factory/
