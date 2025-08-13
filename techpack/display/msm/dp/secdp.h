@@ -52,7 +52,7 @@ extern unsigned int lpcharge;
 /*#define SECDP_EVENT_THREAD*/
 /*#define SECDP_TEST_HDCP2P2_REAUTH*/
 /*#define NOT_SUPPORT_DEX_RES_CHANGE*/
-#define REMOVE_YUV420_AT_PREFER
+/*#define REMOVE_YUV420_AT_PREFER*/
 
 #define DPCD_IEEE_OUI			0x500
 #define DPCD_DEVID_STR			0x503
@@ -434,6 +434,7 @@ struct secdp_hmd {
 struct secdp_hdcp {
 	struct delayed_work start_work;
 	int retry;	/* count if dp link is unstable during hdcp */
+	u32 fail_cnt;
 };
 
 struct secdp_hpd {

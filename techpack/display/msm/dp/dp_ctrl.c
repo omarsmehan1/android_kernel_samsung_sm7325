@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  */
 
@@ -12,7 +11,6 @@
 #include "dp_ctrl.h"
 #include "dp_debug.h"
 #include "sde_dbg.h"
-#include "dp_pll.h"
 #if defined(CONFIG_SEC_DISPLAYPORT)
 #if defined(CONFIG_SEC_DISPLAYPORT_BIGDATA)
 #include <linux/displayport_bigdata.h>
@@ -70,7 +68,6 @@ struct dp_ctrl_private {
 	struct dp_power *power;
 	struct dp_parser *parser;
 	struct dp_catalog_ctrl *catalog;
-	struct dp_pll *pll;
 #if defined(CONFIG_SEC_DISPLAYPORT)
 	bool link_train_status;
 #endif
@@ -176,13 +173,8 @@ trigger_idle:
  * configuration, output format and sink/panel timing information.
  */
 static void dp_ctrl_configure_source_link_params(struct dp_ctrl_private *ctrl,
-		bool enable, bool skip_op)
+		bool enable)
 {
-	if (skip_op) {
-		DP_DEBUG("configuring source link params skipped\n");
-		return;
-	}
-
 	if (enable) {
 		ctrl->catalog->lane_mapping(ctrl->catalog, ctrl->orientation,
 						ctrl->parser->l_map);
@@ -608,7 +600,7 @@ skip_training:
 	return ret;
 }
 
-static int dp_ctrl_link_train(struct dp_ctrl_private *ctrl, bool skip_op)
+static int dp_ctrl_link_train(struct dp_ctrl_private *ctrl)
 {
 	int ret = 0;
 	u8 const encoding = 0x1, downspread = 0x00;
@@ -638,11 +630,6 @@ static int dp_ctrl_link_train(struct dp_ctrl_private *ctrl, bool skip_op)
 	link_info.rate = drm_dp_bw_code_to_link_rate(
 		ctrl->link->link_params.bw_code);
 	link_info.capabilities = ctrl->panel->link_info.capabilities;
-
-	if (skip_op) {
-		DP_DEBUG("link training skipped\n");
-		return 0;
-	}
 
 	ret = drm_dp_link_configure(ctrl->aux->drm_aux, &link_info);
 	if (ret)
@@ -700,7 +687,7 @@ end:
 	return ret;
 }
 
-static int dp_ctrl_setup_main_link(struct dp_ctrl_private *ctrl, bool skip_op)
+static int dp_ctrl_setup_main_link(struct dp_ctrl_private *ctrl)
 {
 	int ret = 0;
 
@@ -714,15 +701,13 @@ static int dp_ctrl_setup_main_link(struct dp_ctrl_private *ctrl, bool skip_op)
 	 * transitioned to PUSH_IDLE. In order to start transmitting a link
 	 * training pattern, we have to first to a DP software reset.
 	 */
-
-	if (!skip_op)
-		ctrl->catalog->reset(ctrl->catalog);
+	ctrl->catalog->reset(ctrl->catalog);
 
 	if (ctrl->fec_mode)
 		drm_dp_dpcd_writeb(ctrl->aux->drm_aux, DP_FEC_CONFIGURATION,
 				0x01);
 
-	ret = dp_ctrl_link_train(ctrl, skip_op);
+	ret = dp_ctrl_link_train(ctrl);
 #if defined(CONFIG_SEC_DISPLAYPORT)
 	if (ret) {
 #if defined(CONFIG_SEC_DISPLAYPORT_BIGDATA)
@@ -740,14 +725,6 @@ static void dp_ctrl_set_clock_rate(struct dp_ctrl_private *ctrl,
 {
 	u32 num = ctrl->parser->mp[clk_type].num_clk;
 	struct dss_clk *cfg = ctrl->parser->mp[clk_type].clk_config;
-	struct dp_catalog *catalog;
-
-	catalog = container_of(ctrl->catalog, struct dp_catalog, ctrl);
-
-	if (catalog->hpd.is_edp) {
-		/* convert to HZ for byte2 ops */
-		rate *= 1000;
-	}
 
 	while (num && strcmp(cfg->clk_name, name)) {
 		num--;
@@ -772,22 +749,6 @@ static int dp_ctrl_enable_link_clock(struct dp_ctrl_private *ctrl)
 
 	dp_ctrl_set_clock_rate(ctrl, "link_clk", type, rate);
 
-	if (ctrl->pll->pll_cfg) {
-		ret = ctrl->pll->pll_cfg(ctrl->pll, rate);
-		if (ret < 0) {
-			DP_ERR("DP pll cfg failed\n");
-			return ret;
-		}
-	}
-
-	if (ctrl->pll->pll_prepare) {
-		ret = ctrl->pll->pll_prepare(ctrl->pll);
-		if (ret < 0) {
-			DP_ERR("DP pll prepare failed\n");
-			return ret;
-		}
-	}
-
 	ret = ctrl->power->clk_enable(ctrl->power, type, true);
 	if (ret) {
 		DP_ERR("Unabled to start link clocks\n");
@@ -799,16 +760,9 @@ static int dp_ctrl_enable_link_clock(struct dp_ctrl_private *ctrl)
 
 static void dp_ctrl_disable_link_clock(struct dp_ctrl_private *ctrl)
 {
-	int rc;
 	DP_DEBUG("+++\n");
 
 	ctrl->power->clk_enable(ctrl->power, DP_LINK_PM, false);
-	if (ctrl->pll->pll_unprepare) {
-		rc = ctrl->pll->pll_unprepare(ctrl->pll);
-		if (rc < 0)
-			DP_ERR("pll unprepare failed\n");
-	}
-
 }
 
 static void dp_ctrl_select_training_pattern(struct dp_ctrl_private *ctrl,
@@ -850,7 +804,7 @@ end:
 	ctrl->training_2_pattern = pattern;
 }
 
-static int dp_ctrl_link_setup(struct dp_ctrl_private *ctrl, bool shallow, bool skip_op)
+static int dp_ctrl_link_setup(struct dp_ctrl_private *ctrl, bool shallow)
 {
 	int rc = -EINVAL;
 	bool downgrade = false;
@@ -885,7 +839,7 @@ static int dp_ctrl_link_setup(struct dp_ctrl_private *ctrl, bool shallow, bool s
 			ctrl->link->link_params.lane_count,
 			ctrl->orientation);
 
-		dp_ctrl_configure_source_link_params(ctrl, true, skip_op);
+		dp_ctrl_configure_source_link_params(ctrl, true);
 
 		if (!(--link_train_max_retries % 10)) {
 			struct dp_link_params *link = &ctrl->link->link_params;
@@ -897,7 +851,7 @@ static int dp_ctrl_link_setup(struct dp_ctrl_private *ctrl, bool shallow, bool s
 
 		dp_ctrl_select_training_pattern(ctrl, downgrade);
 
-		rc = dp_ctrl_setup_main_link(ctrl, skip_op);
+		rc = dp_ctrl_setup_main_link(ctrl);
 		if (!rc)
 			break;
 
@@ -929,7 +883,7 @@ static int dp_ctrl_link_setup(struct dp_ctrl_private *ctrl, bool shallow, bool s
 		if (rc != -EAGAIN)
 			dp_ctrl_link_rate_down_shift(ctrl);
 
-		dp_ctrl_configure_source_link_params(ctrl, false, skip_op);
+		dp_ctrl_configure_source_link_params(ctrl, false);
 		dp_ctrl_disable_link_clock(ctrl);
 
 		/* hw recommended delays before retrying link training */
@@ -1003,7 +957,7 @@ static int dp_ctrl_disable_stream_clocks(struct dp_ctrl_private *ctrl,
 	}
 	return ret;
 }
-static int dp_ctrl_host_init(struct dp_ctrl *dp_ctrl, bool flip, bool reset, bool skip_op)
+static int dp_ctrl_host_init(struct dp_ctrl *dp_ctrl, bool flip, bool reset)
 {
 	struct dp_ctrl_private *ctrl;
 	struct dp_catalog_ctrl *catalog;
@@ -1020,7 +974,7 @@ static int dp_ctrl_host_init(struct dp_ctrl *dp_ctrl, bool flip, bool reset, boo
 	ctrl->orientation = flip;
 	catalog = ctrl->catalog;
 
-	if (reset && !skip_op) {
+	if (reset) {
 		catalog->usb_reset(ctrl->catalog, flip);
 		catalog->phy_reset(ctrl->catalog);
 	}
@@ -1078,7 +1032,7 @@ static void dp_ctrl_send_video(struct dp_ctrl_private *ctrl)
 	ctrl->catalog->state_ctrl(ctrl->catalog, ST_SEND_VIDEO);
 }
 
-static int dp_ctrl_link_maintenance(struct dp_ctrl *dp_ctrl, bool skip_op)
+static int dp_ctrl_link_maintenance(struct dp_ctrl *dp_ctrl)
 {
 	int ret = 0;
 	struct dp_ctrl_private *ctrl;
@@ -1105,7 +1059,7 @@ static int dp_ctrl_link_maintenance(struct dp_ctrl *dp_ctrl, bool skip_op)
 		goto end;
 
 	ctrl->aux->state |= DP_STATE_LINK_MAINTENANCE_STARTED;
-	ret = dp_ctrl_setup_main_link(ctrl, skip_op);
+	ret = dp_ctrl_setup_main_link(ctrl);
 	ctrl->aux->state &= ~DP_STATE_LINK_MAINTENANCE_STARTED;
 
 	if (ret) {
@@ -1123,7 +1077,7 @@ end:
 	return ret;
 }
 
-static void dp_ctrl_process_phy_test_request(struct dp_ctrl *dp_ctrl, bool skip_op)
+static void dp_ctrl_process_phy_test_request(struct dp_ctrl *dp_ctrl)
 {
 	int ret = 0;
 	struct dp_ctrl_private *ctrl;
@@ -1152,14 +1106,14 @@ static void dp_ctrl_process_phy_test_request(struct dp_ctrl *dp_ctrl, bool skip_
 	ctrl->dp_ctrl.stream_off(&ctrl->dp_ctrl, ctrl->panel);
 	ctrl->dp_ctrl.off(&ctrl->dp_ctrl);
 
-	ctrl->aux->init(ctrl->aux, ctrl->parser->aux_cfg, skip_op);
+	ctrl->aux->init(ctrl->aux, ctrl->parser->aux_cfg);
 
 	ret = ctrl->dp_ctrl.on(&ctrl->dp_ctrl, ctrl->mst_mode,
-			ctrl->fec_mode, ctrl->dsc_mode, false, skip_op);
+			ctrl->fec_mode, ctrl->dsc_mode, false);
 	if (ret)
 		DP_ERR("failed to enable DP controller\n");
 
-	ctrl->dp_ctrl.stream_on(&ctrl->dp_ctrl, ctrl->panel, skip_op);
+	ctrl->dp_ctrl.stream_on(&ctrl->dp_ctrl, ctrl->panel);
 	DP_DEBUG("end\n");
 }
 
@@ -1404,7 +1358,7 @@ static void dp_ctrl_fec_dsc_setup(struct dp_ctrl_private *ctrl)
 		DP_WARN("failed to enable sink dsc\n");
 }
 
-static int dp_ctrl_stream_on(struct dp_ctrl *dp_ctrl, struct dp_panel *panel, bool skip_op)
+static int dp_ctrl_stream_on(struct dp_ctrl *dp_ctrl, struct dp_panel *panel)
 {
 	int rc = 0;
 	bool link_ready = false;
@@ -1428,12 +1382,9 @@ static int dp_ctrl_stream_on(struct dp_ctrl *dp_ctrl, struct dp_panel *panel, bo
 		return rc;
 	}
 
-	/*Skip panel config when cont. splash is enabled*/
-	if (!skip_op) {
-		rc = panel->hw_cfg(panel, true);
-		if (rc)
-			return rc;
-	}
+	rc = panel->hw_cfg(panel, true);
+	if (rc)
+		return rc;
 
 	if (ctrl->link->sink_request & DP_TEST_LINK_PHY_TEST_PATTERN) {
 		dp_ctrl_send_phy_test_pattern(ctrl);
@@ -1530,10 +1481,13 @@ static void dp_ctrl_stream_off(struct dp_ctrl *dp_ctrl, struct dp_panel *panel)
 }
 
 #ifdef SECDP_OPTIMAL_LINK_RATE
-static u32 secdp_check_link_clk(struct dp_panel *dp_panel, u32 link_rate)
+#define RES_1920X1080	2073600
+#define RES_2560X1440	3686400
+static bool ps176_high_refresh_rate_check(struct dp_panel *dp_panel)
 {
 	struct dp_panel_info *max_timing;
-	u32 ret_link_rate = link_rate;
+	int max_resolution;
+	bool ret = false;
 
 	if (!secdp_adapter_check_parade())
 		goto end;
@@ -1541,32 +1495,24 @@ static u32 secdp_check_link_clk(struct dp_panel *dp_panel, u32 link_rate)
 	if (!secdp_adapter_check_ps176())
 		goto end;
 
-	if (dp_panel->link_info.num_lanes < 4)
-		goto end;
-
 	max_timing = &dp_panel->max_timing_info;
+	max_resolution = max_timing->h_active * max_timing->v_active;
 
-	DP_INFO("lane_count:%d max:%ux%u@%uhz\n", dp_panel->link_info.num_lanes,
-		max_timing->h_active, max_timing->v_active,
-		max_timing->refresh_rate);
-
-	if (max_timing->h_active == 1920 &&
-			max_timing->v_active == 1080 &&
-			max_timing->refresh_rate == 144) {
-		DP_INFO("needs link_rate <%u> up\n", link_rate);
-
-		if (link_rate == 162000)
-			ret_link_rate = 270000;
-		else if (link_rate == 270000)
-			ret_link_rate = 540000;
-#ifndef SECDP_MAX_HBR2
-		else if (link_rate == 540000)
-			ret_link_rate = 810000;
-#endif
+	if (max_resolution >= RES_1920X1080 &&
+			max_timing->refresh_rate > 110 &&
+			max_timing->pixel_clk_khz > 250000) {
+		ret = true;
+	} else if (max_resolution >= RES_2560X1440 &&
+			max_timing->refresh_rate > 75 &&
+			max_timing->pixel_clk_khz > 300000) {
+		ret = true;
 	}
 
+	DP_INFO("[ps176] max %ux%u@%uhz, pclk %uKhz, %d\n",
+		max_timing->h_active, max_timing->v_active,
+		max_timing->refresh_rate, max_timing->pixel_clk_khz, ret);
 end:
-	return ret_link_rate;
+	return ret;
 }
 
 static u32 secdp_dp_gen_link_clk(struct dp_panel *dp_panel)
@@ -1579,7 +1525,7 @@ static u32 secdp_dp_gen_link_clk(struct dp_panel *dp_panel)
 	calc_link_rate = 540000;
 #endif
 
-	if (!dp_panel)
+	if (!dp_panel || ps176_high_refresh_rate_check(dp_panel))
 		goto end;
 
 	min_link_rate = dp_panel->get_min_req_link_rate(dp_panel);
@@ -1599,8 +1545,6 @@ static u32 secdp_dp_gen_link_clk(struct dp_panel *dp_panel)
 	else
 		DP_ERR("too big!, set default\n");
 
-	calc_link_rate = secdp_check_link_clk(dp_panel, calc_link_rate);
-
 	DP_INFO("min_link_rate <%u>, calc_link_rate <%u>\n",
 		min_link_rate, calc_link_rate);
 end:
@@ -1609,7 +1553,7 @@ end:
 #endif
 
 static int dp_ctrl_on(struct dp_ctrl *dp_ctrl, bool mst_mode,
-		bool fec_mode, bool dsc_mode, bool shallow, bool skip_op)
+		bool fec_mode, bool dsc_mode, bool shallow)
 {
 	int rc = 0;
 	struct dp_ctrl_private *ctrl;
@@ -1659,13 +1603,9 @@ static int dp_ctrl_on(struct dp_ctrl *dp_ctrl, bool mst_mode,
 	ctrl->initial_lane_count = ctrl->link->link_params.lane_count;
 	ctrl->initial_bw_code = ctrl->link->link_params.bw_code;
 
-	rc = dp_ctrl_link_setup(ctrl, shallow, skip_op);
+	rc = dp_ctrl_link_setup(ctrl, shallow);
 	if (!rc)
 		ctrl->power_on = true;
-
-	/*enable stream clocks when cont. splash is enabled*/
-	if (skip_op)
-		dp_ctrl_enable_stream_clocks(ctrl, ctrl->panel);
 end:
 	return rc;
 }
@@ -1673,7 +1613,6 @@ end:
 static void dp_ctrl_off(struct dp_ctrl *dp_ctrl)
 {
 	struct dp_ctrl_private *ctrl;
-	bool skip_op = false;
 
 	if (!dp_ctrl)
 		return;
@@ -1686,7 +1625,7 @@ static void dp_ctrl_off(struct dp_ctrl *dp_ctrl)
 		return;
 
 	ctrl->catalog->fec_config(ctrl->catalog, false);
-	dp_ctrl_configure_source_link_params(ctrl, false, skip_op);
+	dp_ctrl_configure_source_link_params(ctrl, false);
 	ctrl->catalog->reset(ctrl->catalog);
 
 	/* Make sure DP is disabled before clk disable */
@@ -1787,7 +1726,6 @@ struct dp_ctrl *dp_ctrl_get(struct dp_ctrl_in *in)
 	ctrl->aux      = in->aux;
 	ctrl->link     = in->link;
 	ctrl->catalog  = in->catalog;
-	ctrl->pll  = in->pll;
 	ctrl->dev  = in->dev;
 	ctrl->mst_mode = false;
 	ctrl->fec_mode = false;
