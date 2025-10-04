@@ -531,14 +531,6 @@ static int __kprobes do_page_fault(unsigned long addr, unsigned int esr,
 	perf_sw_event(PERF_COUNT_SW_PAGE_FAULTS, 1, regs, addr);
 
 	/*
-	 * let's try a speculative page fault without grabbing the
-	 * mmap_sem.
-	 */
-	fault = handle_speculative_fault(mm, addr, mm_flags, &vma);
-	if (fault != VM_FAULT_RETRY)
-		goto done;
-
-	/*
 	 * As per x86, we may deadlock here. However, since the kernel only
 	 * validly references user space from well defined areas of the code,
 	 * we can bug out early if this is from code which shouldn't.
@@ -561,9 +553,6 @@ retry:
 		}
 #endif
 	}
-
-	if (!vma || !can_reuse_spf_vma(vma, addr))
-		vma = find_vma(mm, addr);
 
 	fault = __do_page_fault(vma, addr, mm_flags, vm_flags);
 	major |= fault & VM_FAULT_MAJOR;

@@ -174,18 +174,10 @@ static void __free_vma(struct vm_area_struct *vma)
 	vm_area_free(vma);
 }
 
-#ifdef CONFIG_SPECULATIVE_PAGE_FAULT
-void put_vma(struct vm_area_struct *vma)
-{
-	if (atomic_dec_and_test(&vma->vm_ref_count))
-		__free_vma(vma);
-}
-#else
 static inline void put_vma(struct vm_area_struct *vma)
 {
 	__free_vma(vma);
 }
-#endif
 
 /*
  * Close a vm structure and free it, returning the next.
@@ -450,13 +442,8 @@ static void validate_mm(struct mm_struct *mm)
 RB_DECLARE_CALLBACKS_MAX(static, vma_gap_callbacks,
 			 struct vm_area_struct, vm_rb,
 			 unsigned long, rb_subtree_gap, vma_compute_gap)
-#ifdef CONFIG_SPECULATIVE_PAGE_FAULT
-#define mm_rb_write_lock(mm)	write_lock(&(mm)->mm_rb_lock)
-#define mm_rb_write_unlock(mm)	write_unlock(&(mm)->mm_rb_lock)
-#else
 #define mm_rb_write_lock(mm)	do { } while (0)
 #define mm_rb_write_unlock(mm)	do { } while (0)
-#endif /* CONFIG_SPECULATIVE_PAGE_FAULT */
 
 /*
  * Update augmented rbtree rb_subtree_gap values after vma->vm_start or
@@ -2339,35 +2326,6 @@ struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 	return vma;
 }
 EXPORT_SYMBOL(find_vma);
-
-#ifdef CONFIG_SPECULATIVE_PAGE_FAULT
-struct vm_area_struct *get_vma(struct mm_struct *mm, unsigned long addr)
-{
-	struct vm_area_struct *vma = NULL;
-
-	read_lock(&mm->mm_rb_lock);
-	vma = __find_vma(mm, addr);
-
-	/*
-	 * If there is a concurrent fast mremap, bail out since the entire
-	 * PMD/PUD subtree may have been remapped.
-	 *
-	 * This is usually safe for conventional mremap since it takes the
-	 * PTE locks as does SPF. However fast mremap only takes the lock
-	 * at the PMD/PUD level which is ok as it is done with the mmap
-	 * write lock held. But since SPF, as the term implies forgoes,
-	 * taking the mmap read lock and also cannot take PTL lock at the
-	 * larger PMD/PUD granualrity, since it would introduce huge
-	 * contention in the page fault path; fall back to regular fault
-	 * handling.
-	 */
-	if (vma && !atomic_inc_unless_negative(&vma->vm_ref_count))
-		vma = NULL;
-	read_unlock(&mm->mm_rb_lock);
-
-	return vma;
-}
-#endif
 
 /*
  * Same as find_vma, but also return a pointer to the previous VMA in *pprev.
