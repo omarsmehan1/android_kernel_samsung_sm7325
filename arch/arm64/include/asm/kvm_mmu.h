@@ -71,7 +71,7 @@
  * perform the register allocation (kvm_update_va_mask uses the
  * specific registers encoded in the instructions).
  */
-.macro kern_hyp_va reg
+.macro kern_hyp_va	reg
 alternative_cb kvm_update_va_mask
 	and     \reg, \reg, #1		/* mask with va_mask */
 	ror	\reg, \reg, #1		/* rotate to the first tag bit */

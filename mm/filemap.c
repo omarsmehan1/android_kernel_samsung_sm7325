@@ -1585,7 +1585,7 @@ EXPORT_SYMBOL_GPL(__lock_page_killable);
 int __lock_page_or_retry(struct page *page, struct mm_struct *mm,
 			 unsigned int flags)
 {
-	if (flags & FAULT_FLAG_ALLOW_RETRY) {
+	if (fault_flag_allow_retry_first(flags)) {
 		/*
 		 * CAUTION! In this case, mmap_sem is not released
 		 * even though return 0.
@@ -2502,7 +2502,6 @@ generic_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 	}
 
 	retval = generic_file_buffered_read(iocb, iter, retval);
-
 out:
 	return retval;
 }
@@ -2602,20 +2601,17 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)
 	struct address_space *mapping = file->f_mapping;
 	struct file *fpin = NULL;
 	pgoff_t offset = vmf->pgoff;
-	unsigned int ra_pages;
 
 	/* If we don't want any read-ahead, don't bother */
-	if (vmf->vma_flags & VM_RAND_READ)
+	if (vmf->vma->vm_flags & VM_RAND_READ)
 		return fpin;
 	if (!ra->ra_pages)
 		return fpin;
 
-	if (vmf->vma_flags & VM_SEQ_READ) {
+	if (vmf->vma->vm_flags & VM_SEQ_READ) {
 		fpin = maybe_unlock_mmap_for_io(vmf, fpin);
-		filemap_tracing_mark_begin(file, offset, ra->ra_pages, 1);
 		page_cache_sync_readahead(mapping, ra, file, offset,
 					  ra->ra_pages);
-		filemap_tracing_mark_end();
 		return fpin;
 	}
 
@@ -2634,13 +2630,10 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)
 	 * mmap read-around
 	 */
 	fpin = maybe_unlock_mmap_for_io(vmf, fpin);
-	ra_pages = min_t(unsigned int, ra->ra_pages, mmap_readaround_limit);
-	ra->start = max_t(long, 0, offset - ra_pages / 2);
-	ra->size = ra_pages;
-	ra->async_size = ra_pages / 4;
-	filemap_tracing_mark_begin(file, offset, ra_pages, 1);
+	ra->start = max_t(long, 0, offset - ra->ra_pages / 2);
+	ra->size = ra->ra_pages;
+	ra->async_size = ra->ra_pages / 4;
 	ra_submit(ra, mapping, file);
-	filemap_tracing_mark_end();
 	return fpin;
 }
 
@@ -2659,16 +2652,14 @@ static struct file *do_async_mmap_readahead(struct vm_fault *vmf,
 	pgoff_t offset = vmf->pgoff;
 
 	/* If we don't want any read-ahead, don't bother */
-	if (vmf->vma_flags & VM_RAND_READ || !ra->ra_pages)
+	if (vmf->vma->vm_flags & VM_RAND_READ || !ra->ra_pages)
 		return fpin;
 	if (ra->mmap_miss > 0)
 		ra->mmap_miss--;
 	if (PageReadahead(page)) {
 		fpin = maybe_unlock_mmap_for_io(vmf, fpin);
-		filemap_tracing_mark_begin(file, offset, ra->ra_pages, 0);
 		page_cache_async_readahead(mapping, ra, file,
 					   page, offset, ra->ra_pages);
-		filemap_tracing_mark_end();
 	}
 	return fpin;
 }
@@ -2683,6 +2674,8 @@ static struct file *do_async_mmap_readahead(struct vm_fault *vmf,
  * The goto's are kind of ugly, but this streamlines the normal case of having
  * it in the page cache, and handles the special cases reasonably without
  * having a lot of duplicated code.
+ *
+ * vma->vm_mm->mmap_sem must be held on entry.
  *
  * If our return value has VM_FAULT_RETRY set, it's because the mmap_sem
  * may be dropped before doing I/O or by lock_page_maybe_drop_mmap().
@@ -2789,9 +2782,7 @@ page_not_uptodate:
 	 */
 	ClearPageError(page);
 	fpin = maybe_unlock_mmap_for_io(vmf, fpin);
-	filemap_tracing_mark_begin(file, offset, 1, 1);
 	error = mapping->a_ops->readpage(file, page);
-	filemap_tracing_mark_end();
 	if (!error) {
 		wait_on_page_locked(page);
 		if (!PageUptodate(page))
@@ -2954,7 +2945,7 @@ int generic_file_mmap(struct file * file, struct vm_area_struct * vma)
  */
 int generic_file_readonly_mmap(struct file *file, struct vm_area_struct *vma)
 {
-	if ((vma->vm_flags & VM_SHARED) && (vma->vm_flags & VM_MAYWRITE))
+	if (vma_is_shared_maywrite(vma))
 		return -EINVAL;
 	return generic_file_mmap(file, vma);
 }
