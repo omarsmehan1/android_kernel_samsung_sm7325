@@ -97,13 +97,11 @@
 #include <linux/sched/stat.h>
 #include <linux/posix-timers.h>
 #include <linux/cpufreq_times.h>
-<<<<<<< HEAD
-#include <linux/cn_proc.h>
-=======
 #ifdef CONFIG_KSU_SUSFS_SUS_MAP
 #include <linux/susfs_def.h>
 #endif
->>>>>>> 9c097cee1 (kernelsu: Add susfs in gki android12-5.10)
+#include <linux/cn_proc.h>
+
 #include <trace/events/oom.h>
 #include "internal.h"
 #include "fd.h"
