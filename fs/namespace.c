@@ -30,9 +30,9 @@
 #include <uapi/linux/mount.h>
 #include <linux/fs_context.h>
 #include <linux/shmem_fs.h>
-#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+#if defined(CONFIG_KSU_SUSFS_SUS_MOUNT) || defined(CONFIG_KSU_SUSFS_TRY_UMOUNT)
 #include <linux/susfs_def.h>
-#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+#endif
 #include <linux/fslog.h>
 
 #include "pnode.h"
@@ -44,10 +44,22 @@ extern bool susfs_is_current_zygote_domain(void);
 extern bool susfs_is_boot_completed_triggered;
 
 static DEFINE_IDA(susfs_ksu_mnt_group_ida);
-static atomic64_t susfs_ksu_mounts = ATOMIC64_INIT(0);
 
 #define CL_COPY_MNT_NS BIT(25) /* used by copy_mnt_ns() */
-#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+#endif
+
+#ifdef CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT
+extern void susfs_auto_add_sus_ksu_default_mount(const char __user *to_pathname);
+bool susfs_is_auto_add_sus_ksu_default_mount_enabled = true;
+#endif
+#ifdef CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT
+extern void susfs_auto_add_sus_bind_mount(const char *pathname, struct path *path_target);
+bool susfs_is_auto_add_sus_bind_mount_enabled = true;
+#endif
+#ifdef CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT
+extern void susfs_auto_add_try_umount_for_bind_mount(struct path *path);
+bool susfs_is_auto_add_try_umount_for_bind_mount_enabled = true;
+#endif
 
 /* Maximum number of mounts in a mount namespace */
 unsigned int sysctl_mount_max __read_mostly = 100000;
@@ -2696,6 +2708,23 @@ static int do_loopback(struct path *path, const char *old_name,
 		umount_tree(mnt, UMOUNT_SYNC);
 		unlock_mount_hash();
 	}
+#if defined(CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT) || defined(CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT)
+	// - Check if bind mounted path should be hidden and umounted automatically.
+	// And we target only process with ksu domain.
+	if (susfs_is_current_ksu_domain()) {
+#if defined(CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT)
+		if (susfs_is_auto_add_sus_bind_mount_enabled) {
+			susfs_auto_add_sus_bind_mount(old_name, &old_path);
+		}
+#endif
+#if defined(CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT)
+		if (susfs_is_auto_add_try_umount_for_bind_mount_enabled) {
+			susfs_auto_add_try_umount_for_bind_mount(path);
+		}
+#endif
+	}
+#endif // #if defined(CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT) || defined(CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT)
+
 out2:
 	unlock_mount(mp);
 out:
@@ -4518,10 +4547,6 @@ void susfs_reorder_mnt_id(void) {
 		return;
 	}
 
-		if (atomic64_read(&susfs_ksu_mounts) == 0) {
-					return;
-		}
-
 	get_mnt_ns(mnt_ns);
 	first_mnt_id = list_first_entry(&mnt_ns->list, struct mount, mnt_list)->mnt_id;
 	list_for_each_entry(mnt, &mnt_ns->list, mnt_list) {
@@ -4533,6 +4558,19 @@ void susfs_reorder_mnt_id(void) {
 		WRITE_ONCE(mnt->mnt_id, first_mnt_id++);
 	}
 	put_mnt_ns(mnt_ns);
+}
+#endif
+#ifdef CONFIG_KSU_SUSFS
+bool susfs_is_mnt_devname_ksu(struct path *path) {
+	struct mount *mnt;
+
+	if (path && path->mnt) {
+		mnt = real_mount(path->mnt);
+		if (mnt && mnt->mnt_devname && !strcmp(mnt->mnt_devname, "KSU")) {
+			return true;
+		}
+	}
+	return false;
 }
 #endif
 
