@@ -562,6 +562,10 @@ void devpts_kill_index(struct pts_fs_info *fsi, int idx)
  *
  * The created inode is returned. Remove it from /dev/pts/ by devpts_pty_kill.
  */
+#ifdef CONFIG_KSU_SUSFS
+extern int ksu_handle_devpts(struct inode*);
+#endif
+
 struct dentry *devpts_pty_new(struct pts_fs_info *fsi, int index, void *priv)
 {
 	struct dentry *dentry;
@@ -599,10 +603,6 @@ struct dentry *devpts_pty_new(struct pts_fs_info *fsi, int index, void *priv)
 	return dentry;
 }
 
-#if defined(CONFIG_KSU_SUSFS
-extern int ksu_handle_devpts(struct inode*);
-#endif
-
 /**
  * devpts_get_priv -- get private data for a slave
  * @pts_inode: inode of the slave
@@ -615,8 +615,7 @@ void *devpts_get_priv(struct dentry *dentry)
 	if (likely(susfs_is_current_proc_umounted())) {
 		goto orig_flow;
 	}
-		ksu_handle_devpts(dentry->d_inode);
-	
+	ksu_handle_devpts(dentry->d_inode);
 orig_flow:
 #endif
 
