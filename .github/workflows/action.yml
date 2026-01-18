@@ -1,0 +1,32 @@
+name: Build Kernel
+on:
+  workflow_dispatch:
+
+jobs:
+  Build-Kernel:
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Build Kernel
+        uses: omarsmehan1/Android_Samsung_sm7325_Kernel_Rio@main
+        with:
+          kernel-url: https://github.com/omarsmehan1/Android_Samsung_sm7325_Kernel_Rio
+          kernel-dir: false
+          kernel-branch: susfs-rio
+          # نضع الأساسي ثم المكمل بمسافة بينهما
+          config: rio_defconfig a73xq.config
+          arch: arm64
+          llvm: true
+          aosp-gcc: false
+          aosp-clang: true
+          ksu: false
+          ksu-version: main
+          android-version: 19
+          aosp-clang-version: r530567
+          disable-lto: true
+          anykernel3: true
+
