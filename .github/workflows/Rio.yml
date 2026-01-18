@@ -1,0 +1,41 @@
+name: Build Kernel SUSFS-RIO
+
+on:
+  workflow_dispatch: # يتيح لك التشغيل اليدوي من المتصفح
+    inputs:
+      variant:
+        description: 'اختر نوع الجهاز'
+        required: true
+        default: 'a73xq'
+        type: choice
+        options:
+          - a73xq
+          - a52sxq
+          - m52xq
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # مهم جداً لجلب كل الفروع
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git curl wget jq unzip tar lz4 awk sed coreutils python3
+
+      - name: Run Build Script
+        run: |
+          chmod +x build.sh
+          ./build.sh "${{ github.event.inputs.variant }}"
+
+      - name: Upload Kernel Files
+        uses: actions/upload-artifact@v4
+        with:
+          name: RIO-Kernel-${{ github.event.inputs.variant }}
+          path: |
+            ~/toolchains/RIO/
+            !~/toolchains/RIO/**/tmp
