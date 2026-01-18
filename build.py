@@ -1,137 +1,216 @@
 #!/usr/bin/env python3
-
 import os
 import subprocess
+import shutil
 import sys
 from datetime import datetime
 
-# ================== Helpers ==================
+# =========================
+# التحقق من المتغيرات
+# =========================
+if len(sys.argv) < 2:
+    print("❌ يجب تحديد الجهاز (مثال: a73xq)")
+    sys.exit(1)
 
-def run(cmd, cwd=None):
-    print(f"[CMD] {cmd}")
+VARIANT = sys.argv[1]
+
+# =========================
+# المسارات
+# =========================
+SRC_DIR = os.getcwd()
+OUT_DIR = os.path.join(SRC_DIR, "out")
+TC_DIR = os.path.join(os.path.expanduser("~"), "toolchains")
+AK3_DIR = os.path.join(SRC_DIR, "AnyKernel3")
+
+CLANG_VER = "clang-r530567"
+CLANG_PATH = os.path.join(TC_DIR, CLANG_VER, "bin")
+
+DATE_STR = datetime.now().strftime("%Y%m%d")
+
+# =========================
+# البيئة (LLVM فقط)
+# =========================
+def get_env(localversion):
+    env = os.environ.copy()
+
+    env["PATH"] = f"{CLANG_PATH}:{env.get('PATH', '')}"
+
+    env["ARCH"] = "arm64"
+    env["LLVM"] = "1"
+    env["LLVM_IAS"] = "1"
+
+    # متغيرات GKI
+    env["KMI_GENERATION"] = "2"
+    env["DEPMOD"] = "depmod"
+    env["STOP_SHIP_TRACEPRINTK"] = "1"
+    env["IN_KERNEL_MODULES"] = "1"
+    env["DO_NOT_STRIP_MODULES"] = "1"
+
+    # تسمية النواة
+    env["LOCALVERSION"] = localversion
+
+    return env
+
+def run_cmd(cmd, env, cwd=None):
     subprocess.run(
         cmd,
         shell=True,
         check=True,
-        cwd=cwd,
         executable="/bin/bash",
-        env=os.environ
+        cwd=cwd,
+        env=env
     )
 
-def die(msg):
-    print(f"❌ {msg}")
-    sys.exit(1)
+# =========================
+# تجهيز clang و AnyKernel3
+# =========================
+def prepare_env():
+    print("🚀 تجهيز الأدوات...")
 
-# ================== Paths & Vars ==================
+    os.makedirs(TC_DIR, exist_ok=True)
 
-SRC_DIR = os.getcwd()
-OUT_DIR = os.path.join(SRC_DIR, "out")
-TC_DIR = os.path.join(os.path.expanduser("~"), "toolchains")
-JOBS = os.cpu_count()
+    if not os.path.exists(CLANG_PATH):
+        print(f"⬇️ تنزيل {CLANG_VER} ...")
+        url = (
+            "https://android.googlesource.com/platform/prebuilts/"
+            f"clang/host/linux-x86/+archive/refs/heads/main/{CLANG_VER}.tar.gz"
+        )
+        subprocess.run(
+            f"mkdir -p {TC_DIR}/{CLANG_VER} && wget -q {url} -O {TC_DIR}/clang.tar.gz",
+            shell=True,
+            check=True
+        )
+        subprocess.run(
+            f"tar -xf {TC_DIR}/clang.tar.gz -C {TC_DIR}/{CLANG_VER}",
+            shell=True,
+            check=True
+        )
 
-CLANG_VER = "clang-r530567"
-CLANG_DIR = os.path.join(TC_DIR, CLANG_VER)
-CLANG_BIN = os.path.join(CLANG_DIR, "bin")
+    if not os.path.exists(AK3_DIR):
+        subprocess.run(
+            f"git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git {AK3_DIR}",
+            shell=True,
+            check=True
+        )
 
-KERNEL_NAME = os.environ.get("KERNEL_NAME", "RIO")
+# =========================
+# تنظيف AnyKernel3
+# =========================
+def clean_anykernel():
+    for item in ["Image", "dtbo.img", "dtb"]:
+        path = os.path.join(AK3_DIR, item)
+        if os.path.exists(path):
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            else:
+                os.remove(path)
 
-# ================== Checks ==================
+# =========================
+# التغليف
+# =========================
+def package_kernel(label):
+    print("📦 تغليف النواة...")
 
-def check_deps():
-    tools = ["git", "curl", "wget", "tar", "awk", "sed"]
-    missing = [t for t in tools if not shutil_which(t)]
-    if missing:
-        die(f"Missing tools: {' '.join(missing)}")
+    img = os.path.join(OUT_DIR, "arch/arm64/boot/Image")
+    dtbo = os.path.join(OUT_DIR, "arch/arm64/boot/dtbo.img")
 
-def shutil_which(cmd):
-    return any(
-        os.access(os.path.join(path, cmd), os.X_OK)
-        for path in os.environ["PATH"].split(os.pathsep)
+    if not os.path.exists(img):
+        raise FileNotFoundError("❌ ملف Image غير موجود")
+
+    clean_anykernel()
+
+    shutil.copy2(img, AK3_DIR)
+    if os.path.exists(dtbo):
+        shutil.copy2(dtbo, AK3_DIR)
+
+    # DTB
+    dtb_src = os.path.join(OUT_DIR, "arch/arm64/boot/dts/vendor/qcom")
+    dtb_dst = os.path.join(AK3_DIR, "dtb")
+    os.makedirs(dtb_dst, exist_ok=True)
+
+    if os.path.exists(dtb_src):
+        for f in os.listdir(dtb_src):
+            if f.endswith(".dtb"):
+                shutil.copy2(os.path.join(dtb_src, f), dtb_dst)
+
+    os.chdir(AK3_DIR)
+    subprocess.run(
+        "sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh",
+        shell=True,
+        check=True
     )
 
-# ================== Toolchain ==================
-
-def fetch_clang():
-    if os.path.isdir(CLANG_BIN):
-        return
-
-    os.makedirs(CLANG_DIR, exist_ok=True)
-    url = (
-        "https://android.googlesource.com/platform/prebuilts/"
-        f"clang/host/linux-x86/+archive/refs/heads/main/{CLANG_VER}.tar.gz"
+    zip_name = f"RIO_{label}_{VARIANT}_{DATE_STR}.zip"
+    subprocess.run(
+        f"zip -r9 {zip_name} * -x .git/ .github/ LICENSE README.md",
+        shell=True,
+        check=True
     )
 
-    tarball = os.path.join(TC_DIR, f"{CLANG_VER}.tar.gz")
-    print(f"⬇️  Downloading Clang {CLANG_VER}")
-    run(f"wget -q {url} -O {tarball}")
-    run(f"tar xf {tarball} -C {CLANG_DIR}")
-    os.remove(tarball)
+    shutil.move(zip_name, SRC_DIR)
+    os.chdir(SRC_DIR)
 
-# ================== Kernel Build ==================
+    print(f"✅ تم إنتاج: {zip_name}")
 
-def build_kernel(variant):
-    devices = {
-        "a73xq": "A73",
-        "a52sxq": "A52S",
-        "m52xq": "M52",
-    }
+# =========================
+# مرحلة البناء
+# =========================
+def build_stage(branch, label, setup_sukisu=False):
+    print(f"\n🌟 بدء المرحلة: {label} ({branch})")
 
-    if variant not in devices:
-        die(f"Unknown device: {variant}")
+    subprocess.run("git reset --hard HEAD && git clean -fd", shell=True, check=True)
+    subprocess.run(f"git checkout -f {branch}", shell=True, check=True)
 
-    device = devices[variant]
+    if setup_sukisu:
+        print("🛠️ تثبيت ReSukiSU...")
+        subprocess.run("rm -rf KernelSU drivers/kernelsu", shell=True, check=True)
+        subprocess.run(
+            'curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s builtin',
+            shell=True,
+            check=True
+        )
 
-    os.environ.update({
-        "ARCH": "arm64",
-        "LLVM": "1",
-        "LLVM_IAS": "1",
-        "BRANCH": "android11",
-        "KMI_GENERATION": "2",
-        "DEPMOD": "depmod",
-        "KCFLAGS": os.environ.get("KCFLAGS", "") + " -D__ANDROID_COMMON_KERNEL__",
-        "STOP_SHIP_TRACEPRINTK": "1",
-        "IN_KERNEL_MODULES": "1",
-        "DO_NOT_STRIP_MODULES": "1",
-    })
-
+    if os.path.exists(OUT_DIR):
+        shutil.rmtree(OUT_DIR)
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    comrev = subprocess.check_output(
-        ["git", "rev-parse", "--short", "HEAD"],
-        text=True
-    ).strip()
+    localversion = f"-RIO-{label}-{VARIANT}-{DATE_STR}"
+    env = get_env(localversion)
 
-    localversion = f"-{KERNEL_NAME}-android11-2-{comrev}-{variant}"
-    os.environ["LOCALVERSION"] = localversion
+    print("⚙️ إعداد config...")
+    run_cmd(
+        f"make -C {SRC_DIR} O={OUT_DIR} rio_defconfig {VARIANT}.config",
+        env
+    )
 
-    print("================================")
-    print(f" Kernel Name : {KERNEL_NAME}")
-    print(f" Device      : {device}")
-    print(f" Variant     : {variant}")
-    print(f" Toolchain   : {subprocess.getoutput('clang --version').splitlines()[0]}")
-    print(f" LOCALVERSION: {localversion}")
-    print("================================")
+    jobs = os.cpu_count()
+    print(f"🔨 بناء النواة ({jobs} threads, LLVM only)...")
+    run_cmd(
+        f"make -j{jobs} -C {SRC_DIR} O={OUT_DIR}",
+        env
+    )
 
-    run(f"make -j{JOBS} -C {SRC_DIR} O={OUT_DIR} rio_defconfig {variant}.config")
-    run(f"make -j{JOBS} -C {SRC_DIR} O={OUT_DIR}")
+    package_kernel(label)
 
-# ================== Entry ==================
-
-def main():
-    if len(sys.argv) < 2:
-        die("Usage: KERNEL_NAME=MyKernel build.py <a73xq|a52sxq|m52xq>")
-
-    variant = sys.argv[1]
-
-    os.environ["PATH"] = f"{CLANG_BIN}:{os.environ['PATH']}"
-
-    check_deps()
-    fetch_clang()
-
-    run("git switch qcom_rio")
-    build_kernel(variant)
-
-    print("🎉 Build complete")
-
+# =========================
+# التشغيل
+# =========================
 if __name__ == "__main__":
-    main()
+    try:
+        prepare_env()
+
+        build_stage(
+            branch="main",
+            label="GKI"
+        )
+
+        build_stage(
+            branch="susfs-rio",
+            label="SUKISU",
+            setup_sukisu=True
+        )
+
+        print("\n🎉 تم بناء جميع النسخ بنجاح")
+    except Exception as e:
+        print(f"\n❌ فشل البناء: {e}")
+        sys.exit(1)
