@@ -1,7 +1,7 @@
 name: Build Kernel SUSFS-RIO
 
 on:
-  workflow_dispatch: # يتيح لك التشغيل اليدوي من المتصفح
+  workflow_dispatch:
     inputs:
       variant:
         description: 'اختر نوع الجهاز'
@@ -20,12 +20,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # مهم جداً لجلب كل الفروع
+          fetch-depth: 0
 
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y git curl wget jq unzip tar lz4 awk sed coreutils python3
+          # تم استبدال awk بـ gawk لتجنب خطأ "no installation candidate"
+          sudo apt-get install -y git curl wget jq unzip tar lz4 gawk sed coreutils python3 bc build-essential libssl-dev libelf-dev
 
       - name: Run Build Script
         run: |
