@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Build Kernel
-        uses: dabao5/kernel_build_action@main
+        uses: omarsmehan1/Android_Samsung_sm7325_Kernel_Rio@main
         with:
           kernel-url: https://github.com/omarsmehan1/Android_Samsung_sm7325_Kernel_Rio
           kernel-dir: false
