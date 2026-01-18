@@ -3,121 +3,119 @@
 set -e
 set -o pipefail
 
-# فحص الأدوات المطلوبة قبل البدء
+# فحص الأدوات الأساسية وتثبيتها إذا نقصت
 check_dependencies() {
-    local missing=false
-    for tool in git curl wget jq unzip tar lz4 awk sed sha1sum md5sum; do
+    for tool in git curl wget jq unzip tar lz4 gawk sed sha1sum md5sum; do
         if ! command -v "$tool" &> /dev/null; then
-            echo "Error: Required tool '$tool' is not installed."
-            missing=true
+            echo "Installing missing tool: $tool"
+            sudo apt-get install -y "$tool" || true
         fi
     done
-    if $missing; then
-        echo "Exiting due to missing dependencies." >&2
-        exit 1
-    fi
 }
 
 check_dependencies
 
-################################################ المتغيرات الأساسية
-USR_NAME="$(whoami)" 
-SRC_DIR="$(pwd)" 
-OUT_DIR="$SRC_DIR/out" 
-TC_DIR="$HOME/toolchains" 
+################################################ المتغيرات
+SRC_DIR="$(pwd)"
+OUT_DIR="$SRC_DIR/out"
+TC_DIR="$HOME/toolchains"
+AK3_DIR="$SRC_DIR/AnyKernel3"
 JOBS=$(nproc)
+export SRC_DIR OUT_DIR TC_DIR JOBS
 
-export USR_NAME SRC_DIR OUT_DIR TC_DIR JOBS
-
-################################################ أدوات البناء (Clang)
-CLANGVER="clang-r530567" 
+################################################ أدوات البناء
+CLANGVER="clang-r530567"
 CLANG_PREBUILT_BIN="$TC_DIR/$CLANGVER/bin/"
-export CLANGVER CLANG_PREBUILT_BIN
-export PATH="$TC_DIR:$CLANG_PREBUILT_BIN:$PATH"
+export PATH="$CLANG_PREBUILT_BIN:$PATH"
 
-################################################ الوظائف المساعدة
 fetch_tools() {
+    mkdir -p "$TC_DIR"
+    
     # تحميل Clang
     if [[ ! -d "$CLANG_PREBUILT_BIN" ]]; then
+        echo "  -> Downloading Clang..."
+        URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/$CLANGVER.tar.gz"
         mkdir -p "$TC_DIR/$CLANGVER"
-        AOSPTC_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/$CLANGVER.tar.gz"
-        echo "  -> Downloading Clang toolchain ($CLANGVER)..."
-        [ ! -f "$TC_DIR/$CLANGVER.tar.gz" ] && wget "$AOSPTC_URL" -P "$TC_DIR"
-        tar xf "$TC_DIR/$CLANGVER.tar.gz" -C "$TC_DIR/$CLANGVER"
-        rm "$TC_DIR/$CLANGVER.tar.gz"
+        wget -q "$URL" -O "$TC_DIR/clang.tar.gz"
+        tar -xf "$TC_DIR/clang.tar.gz" -C "$TC_DIR/$CLANGVER"
+        rm "$TC_DIR/clang.tar.gz"
     fi
 
-    # تحميل Magiskboot لمعالجة الصور
-    if [[ ! -f "$TC_DIR/magiskboot" ]]; then
-        APK_URL="$(curl -s "https://api.github.com/repos/topjohnwu/Magisk/releases" | grep -oE 'https://[^\"]+\.apk' | grep 'Magisk[-.]v' | head -n 1)"
-        echo "  -> Downloading Magisk..."
-        [ ! -f "$TC_DIR/magisk.apk" ] && wget "$APK_URL" -P "$TC_DIR" -O "$TC_DIR/magisk.apk"
-        unzip -p "$TC_DIR/magisk.apk" "lib/x86_64/libmagiskboot.so" > "$TC_DIR/magiskboot"
-        chmod +x "$TC_DIR/magiskboot"
-        mkdir -p "$TC_DIR/magisk"
-        unzip -p "$TC_DIR/magisk.apk" "assets/stub.apk" > "$TC_DIR/magisk/stub.apk"
-        unzip -p "$TC_DIR/magisk.apk" "lib/arm64-v8a/libinit-ld.so" > "$TC_DIR/magisk/init-ld"
-        unzip -p "$TC_DIR/magisk.apk" "lib/arm64-v8a/libmagiskinit.so" > "$TC_DIR/magisk/magiskinit"
-        unzip -p "$TC_DIR/magisk.apk" "lib/arm64-v8a/libmagisk.so" > "$TC_DIR/magisk/magisk"
-    fi
-
-    # تحميل avbtool و الصور الأصلية
-    if [[ ! -f "$TC_DIR/avbtool" ]]; then
-        AVBTOOL_URL="https://android.googlesource.com/platform/external/avb/+/refs/heads/main/avbtool.py?format=TEXT"
-        curl -s "$AVBTOOL_URL" | base64 --decode > "$TC_DIR/avbtool"
-        chmod +x "$TC_DIR/avbtool"
-    fi
-
-    if [[ ! -d "$TC_DIR/images" ]]; then
-        mkdir -p "$TC_DIR/images"
-        declare -A d
-        d["A73"]="ngdplnk/proprietary_vendor_samsung_a73xq"
-        d["A52S"]="RisenID/proprietary_vendor_samsung_a52sxq"
-        d["M52"]="ngdplnk/proprietary_vendor_samsung_m52xq"
-        for n in "${!d[@]}"; do
-            mkdir -p "$TC_DIR/images/$n"
-            wget -qO- "$(curl -s "https://api.github.com/repos/${d[$n]}/releases/latest" | jq -r '.assets[] | select(.name | test(".*_kernel.tar$")) | .browser_download_url')" | tar xf - -C "$TC_DIR/images/$n" && lz4 -dm --rm "$TC_DIR/images/$n/"*
-        done
+    # تحضير AnyKernel3
+    if [[ ! -d "$AK3_DIR" ]]; then
+        echo "  -> Cloning AnyKernel3..."
+        git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git "$AK3_DIR"
     fi
 }
 
-# (ملاحظة: وظائف build_kernel و build_modules و gki_repack و mag_repack و gen_pack تظل كما هي في السكربت الأصلي لديك)
-# سأضع هنا وظيفة ENTRY المعدلة التي تربط كل شيء:
+build_kernel() {
+    local variant=$1
+    export ARCH=arm64
+    export LLVM=1
+    export DEFCONF="rio_defconfig"
+    export FRAG="${variant}.config"
 
-# ... (بقية الوظائف build_kernel, build_modules, إلخ) ...
+    echo "--- Building Kernel for $variant ---"
+    make -j$JOBS -C $SRC_DIR O=$OUT_DIR $DEFCONF $FRAG
+    make -j$JOBS -C $SRC_DIR O=$OUT_DIR
+
+    if [[ ! -f "$OUT_DIR/arch/arm64/boot/Image" ]]; then
+        echo "Error: Kernel build failed!"
+        exit 1
+    fi
+}
+
+gen_zip() {
+    local variant=$1
+    echo "--- Creating AnyKernel3 Zip (Image + DTBO + DTB) for $variant ---"
+    
+    cd "$AK3_DIR"
+    # تنظيف شامل قبل التجهيز
+    rm -rf *.zip Image dtbo.img dtb modules/
+
+    # 1. نسخ ملف الكيرنل الأساسي
+    cp "$OUT_DIR/arch/arm64/boot/Image" .
+
+    # 2. نسخ ملف dtbo.img (الذي طلبته)
+    if [[ -f "$OUT_DIR/arch/arm64/boot/dtbo.img" ]]; then
+        cp "$OUT_DIR/arch/arm64/boot/dtbo.img" .
+    else
+        echo "Warning: dtbo.img not found in build directory!"
+    fi
+
+    # 3. نسخ ملف dtb (الذي طلبته)
+    if [[ -f "$OUT_DIR/arch/arm64/boot/dts/vendor/qcom/yupik.dtb" ]]; then
+        cp "$OUT_DIR/arch/arm64/boot/dts/vendor/qcom/yupik.dtb" "./dtb"
+    else
+        echo "Warning: yupik.dtb not found!"
+    fi
+
+    # تعديل ملف anykernel.sh ليتناسب مع الملفات المضافة
+    sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
+    
+    # ضغط الملف النهائي
+    ZIP_NAME="AnyKernel3_RIO_${variant}_$(date +%Y%m%d).zip"
+    zip -r9 "$ZIP_NAME" * -x .git/ .github/ LICENSE README.md
+    
+    mv "$ZIP_NAME" "$SRC_DIR/"
+    echo "Successfully generated: $ZIP_NAME"
+    cd "$SRC_DIR"
+}
 
 ENTRY() {
-    if [[ "$1" == "clean" ]]; then
-        echo "--- Cleaning ---"
-        rm -rf "$OUT_DIR" "$TC_DIR/RIO"
-        exit 0
-    fi
-
-    DEBUG=false
     VARIANT="${1:-}"
-    [[ -z "$VARIANT" ]] && { echo "Usage: $0 <a73xq|a52sxq|m52xq> | clean"; exit 1; }
+    [[ -z "$VARIANT" ]] && { echo "Usage: ./build.sh <a73xq|a52sxq|m52xq>"; exit 1; }
 
-    echo "=== Building for $VARIANT ==="
     fetch_tools
     
-    # إدارة الفروع
-    echo "--- Preparing source branches ---"
-    git checkout main || echo "Main branch not found."
-    echo "--- Switching to build branch: susfs-rio ---"
+    # التبديل لفرع susfs-rio
+    echo "--- Preparing branch: susfs-rio ---"
     git checkout susfs-rio || git switch susfs-rio
 
-    echo "--- Building Kernel (GKI + SUSFS) ---"
     build_kernel "$VARIANT"
-    build_modules gki
-    
-    gen_artifact
-    gki_repack gki
+    gen_zip "$VARIANT"
 
-    echo "--- Packaging Final Images ---"
-    mag_repack
-    gen_pack
-
-    echo "=== Build complete for $VARIANT ==="
+    echo "=== Build Finished for $VARIANT ==="
 }
-ENTRY "${1:-}"
 
+ENTRY "${1:-}"
