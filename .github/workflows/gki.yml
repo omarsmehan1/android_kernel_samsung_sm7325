@@ -1,0 +1,23 @@
+name: Build GKI
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: 'Device'
+        required: true
+        default: 'a52sxq'
+        type: choice
+        options: [a73xq, a52sxq, m52xq]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          chmod +x build_gki.sh
+          ./build_gki.sh ${{ github.event.inputs.device }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GKI-Kernel
+          path: ~/toolchains/RIO/FINAL/*.zip
+
