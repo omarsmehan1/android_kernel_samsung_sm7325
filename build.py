@@ -155,17 +155,17 @@ def package_kernel(label):
 # =========================
 # مرحلة البناء
 # =========================
-def build_stage(branch, label, setup_sukisu=False):
+def build_stage(branch, label, setup_RKSU=False):
     print(f"\n🌟 بدء المرحلة: {label} ({branch})")
 
     subprocess.run("git reset --hard HEAD && git clean -fd", shell=True, check=True)
     subprocess.run(f"git checkout -f {branch}", shell=True, check=True)
 
-    if setup_sukisu:
-        print("🛠️ تثبيت ReSukiSU...")
+    if setup_RKSU:
+        print("🛠️ تثبيت RKSU...")
         subprocess.run("rm -rf KernelSU drivers/kernelsu", shell=True, check=True)
         subprocess.run(
-            'curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s builtin',
+            'curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s susfs-rksu-master',
             shell=True,
             check=True
         )
@@ -206,8 +206,8 @@ if __name__ == "__main__":
 
         build_stage(
             branch="susfs-rio",
-            label="SUKISU",
-            setup_sukisu=True
+            label="RKSU",
+            setup_RKSU=True
         )
 
         print("\n🎉 تم بناء جميع النسخ بنجاح")
