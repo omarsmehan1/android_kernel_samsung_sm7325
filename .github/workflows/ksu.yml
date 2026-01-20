@@ -17,24 +17,35 @@ jobs:
       contents: read
 
     steps:
-      - name: 📥 Checkout Source
+      - name: 📥 جلب الكود المصدري (Checkout)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 🛠️ Build Kernel
+      - name: 📦 تثبيت الأدوات والاعتمادات (Dependencies)
         run: |
           chmod +x build_ksu.sh
-          ./build_ksu.sh ${{ github.event.inputs.device }}
+          ./build_ksu.sh deps
 
-      - name: 🏷️ Set Artifact Name
+      - name: 🛠️ تحميل سلسلة أدوات Clang (Toolchain)
+        run: ./build_ksu.sh tools
+
+      - name: 🧬 إعداد KernelSU و SUSFS
+        run: ./build_ksu.sh ksu
+
+      - name: 🏗️ بناء النواة (Kernel Compilation)
+        run: ./build_ksu.sh build ${{ github.event.inputs.device }}
+
+      - name: 📦 تجهيز حزمة التفليش (Packaging)
+        run: ./build_ksu.sh pack ${{ github.event.inputs.device }}
+
+      - name: 🏷️ تحديد اسم الملف (Set Artifact Name)
         run: |
           echo "ARTIFACT_NAME=NovaKernel-${{ github.event.inputs.device }}-KSU-$(date +%Y%m%d)" >> $GITHUB_ENV
 
-      - name: 📤 Upload Kernel Artifact
+      - name: 📤 رفع الكيرنل النهائي (Upload)
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
-          # رفع محتويات المجلد مباشرة يمنع "الضغط داخل ضغط"
           path: ~/toolchains/RIO/work_ksu/*
           compression-level: 9
