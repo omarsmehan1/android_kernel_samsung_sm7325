@@ -6,7 +6,7 @@ AK3_REPO="https://github.com/omarsmehan1/AnyKernel3.git"
 
 install_deps() {
     echo "--- Installing Dependencies ---"
-    sudo apt update && sudo apt install -y git curl zip wget make gcc g++ bc
+    sudo apt update && sudo apt upgrade -y && sudo apt install -y git curl zip wget make gcc g++ bc
 }
 
 SRC_DIR="$(pwd)"
