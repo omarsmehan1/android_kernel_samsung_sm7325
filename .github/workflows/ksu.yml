@@ -1,10 +1,10 @@
-name: 🚀 Build NovaKernel KSU
+name: 🚀 Build NovaKernel KSU Professional
 
 on:
   workflow_dispatch:
     inputs:
       device:
-        description: 'اختر الجهاز المراد بناء الكيرنل له'
+        description: 'اختر الجهاز المراد بناؤه'
         required: true
         default: 'a73xq'
         type: choice
@@ -17,23 +17,24 @@ jobs:
       contents: read
 
     steps:
-      - name: 📥 جلب الكود المصدري (Checkout)
+      - name: 📥 Checkout Source
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 🛠️ تشغيل سكربت البناء
+      - name: 🛠️ Build Kernel
         run: |
           chmod +x build_ksu.sh
           ./build_ksu.sh ${{ github.event.inputs.device }}
 
-      - name: 🏷️ تحديد اسم الملف (Artifact Name)
+      - name: 🏷️ Set Artifact Name
         run: |
           echo "ARTIFACT_NAME=NovaKernel-${{ github.event.inputs.device }}-KSU-$(date +%Y%m%d)" >> $GITHUB_ENV
 
-      - name: 📤 رفع الكيرنل الجاهز
+      - name: 📤 Upload Kernel Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
-          # السر هنا: رفع ما بداخل المجلد مباشرة يمنع الضغط المزدوج
+          # رفع محتويات المجلد مباشرة يمنع "الضغط داخل ضغط"
           path: ~/toolchains/RIO/work_ksu/*
+          compression-level: 9
