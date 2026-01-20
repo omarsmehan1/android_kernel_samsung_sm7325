@@ -120,15 +120,25 @@ build_kernel() {
 
 # --- 🎁 5. التجميع النهائي ---
 gen_anykernel() {
+    # هذا السطر يحل مشكلة الخطأ الأصفر في GitHub Actions
+    echo -e "${BLUE}===> Cleaning up Git metadata...${NC}"
+    rm -rf "$SRC_DIR/KernelSU/.git" || true
+
     echo -e "${BLUE}===> Packaging Kernel into AnyKernel3...${NC}"
     AK3_DIR="$TC_DIR/RIO/work_ksu"
     rm -rf "$AK3_DIR" && mkdir -p "$AK3_DIR"
     cp -af "$TC_DIR/AnyKernel3/"* "$AK3_DIR/"
     cp "$OUT_DIR/arch/arm64/boot/Image" "$AK3_DIR/"
     cp "$OUT_DIR/arch/arm64/boot/dtbo.img" "$AK3_DIR/"
-    cp "$OUT_DIR/arch/arm64/boot/dts/vendor/qcom/yupik.dtb" "$AK3_DIR/dtb" 2>/dev/null || true
+    
+    # التأكد من نسخ ملف الـ DTB إذا وجد
+    if [ -f "$OUT_DIR/arch/arm64/boot/dts/vendor/qcom/yupik.dtb" ]; then
+        cp "$OUT_DIR/arch/arm64/boot/dts/vendor/qcom/yupik.dtb" "$AK3_DIR/dtb"
+    fi
+    
     echo -e "${GREEN}✔ Final Directory is Ready for Upload.${NC}"
 }
+
 
 # --- 🚀 Main Control Logic ---
 case "$1" in
