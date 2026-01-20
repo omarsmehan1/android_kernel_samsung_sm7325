@@ -2,7 +2,7 @@
 set -e
 set -o pipefail
 
-# --- 🎨 Palette ---
+# --- 🎨 Palette (إعدادات الألوان) ---
 BLUE='\033[0;34m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -11,7 +11,7 @@ PURPLE='\033[0;35m'
 WHITE='\033[1;37m'
 NC='\033[0m' 
 
-# --- 🌐 Paths ---
+# --- 🌐 Paths & Vars ---
 AK3_REPO="https://github.com/omarsmehan1/AnyKernel3.git"
 SRC_DIR="$(pwd)"
 OUT_DIR="$SRC_DIR/out"
@@ -27,6 +27,7 @@ display_target_banner() {
         a73xq)  device_full_name="SAMSUNG GALAXY A73 5G";;
         a52sxq) device_full_name="SAMSUNG GALAXY A52s 5G";;
         m52xq)  device_full_name="SAMSUNG GALAXY M52 5G";;
+        *) device_full_name="UNKNOWN DEVICE";;
     esac
 
     echo -e "${CYAN}__________________________________________________________${NC}"
@@ -39,48 +40,55 @@ display_target_banner() {
     echo -e "${WHITE} |_______||__| |__||_______||_______||_______||_______| ${NC}"
     echo -e "${CYAN}__________________________________________________________${NC}"
     echo -e ""
-    echo -e "${YELLOW}  BUILDING FOR : ${NC}${GREEN}$device_full_name${NC}"
-    echo -e "${YELLOW}  VARIANT      : ${NC}${GREEN}$1${NC}"
-    echo -e "${YELLOW}  DATE         : ${NC}${GREEN}$(date)${NC}"
+    echo -e "${YELLOW}  TARGET PHONE : ${NC}${GREEN}$device_full_name${NC}"
+    echo -e "${YELLOW}  VARIANT      : ${NC}${CYAN}$1${NC}"
+    echo -e "${YELLOW}  DATE         : ${NC}${WHITE}$(date)${NC}"
     echo -e "${CYAN}__________________________________________________________${NC}\n"
 }
 
+# --- 📦 1. تثبيت الاعتمادات ---
 install_deps() {
-    echo -e "${BLUE}===> Installing Essential Tools...${NC}"
+    display_target_banner "$1"
+    echo -e "${BLUE}===> Installing System Dependencies...${NC}"
     sudo apt update && sudo apt install -y git curl zip wget make gcc g++ bc libssl-dev aria2
 }
 
+# --- 🛠️ 2. تحميل الأدوات (Turbo Mode) ---
 fetch_tools() {
-    echo -e "${BLUE}===> Fetching Toolchain (Turbo Mode)...${NC}"
+    echo -e "${BLUE}===> Fetching Toolchain (using aria2c for speed)...${NC}"
     if [[ ! -d "$TC_DIR/clang-r530567" ]]; then
         mkdir -p "$TC_DIR/clang-r530567"
+        # تحميل Clang بـ 16 اتصال متزامن
         aria2c -x16 -s16 -k1M "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r530567.tar.gz" \
                -d "$TC_DIR" -o "clang.tar.gz"
         tar xf "$TC_DIR/clang.tar.gz" -C "$TC_DIR/clang-r530567"
         rm "$TC_DIR/clang.tar.gz"
     fi
     rm -rf "$TC_DIR/AnyKernel3"
+    echo -e "${YELLOW}-> Cloning AnyKernel3...${NC}"
     git clone "$AK3_REPO" "$TC_DIR/AnyKernel3"
 }
 
+# --- 🧬 3. إعداد KernelSU ---
 setup_ksu() {
-    echo -e "${BLUE}===> Setting up KernelSU & SUSFS...${NC}"
+    echo -e "${BLUE}===> Integrating KernelSU & SUSFS...${NC}"
     git switch susfs-rio || git checkout susfs-rio
     rm -rf KernelSU drivers/kernelsu
     curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s susfs-rksu-master
 }
 
+# --- 🏗️ 4. بناء النواة (GKI Organized) ---
 build_kernel() {
-    # استدعاء اللوحة الإبداعية أولاً
     display_target_banner "$1"
-
     case "$1" in
         a73xq)  export VARIANT="a73xq";;
         a52sxq) export VARIANT="a52sxq";;
         m52xq)  export VARIANT="m52xq";;
     esac
 
-    # إعدادات GKI المنظمة
+    echo -e "${PURPLE}===> Configuring GKI & Starting Build...${NC}"
+
+    # --- إعدادات GKI المرتبة ---
     export ARCH=arm64
     export BRANCH="android11"
     export LLVM=1
@@ -104,28 +112,30 @@ build_kernel() {
     export LOCALVERSION="-NovaKernel-KSU-$BRANCH-$KMI_GENERATION-$COMREV-$VARIANT"
 
     START=$(date +%s)
-    echo -e "${BLUE}===> Compiling Kernel...${NC}"
     make -j$JOBS -C "$SRC_DIR" O="$OUT_DIR" $DEFCONF $FRAG
     make -j$JOBS -C "$SRC_DIR" O="$OUT_DIR"
     
-    echo -e "\n${GREEN}✔ Build Finished in $(($(date +%s) - START)) seconds.${NC}"
+    echo -e "\n${GREEN}✔ Build Successful in $(($(date +%s) - START)) seconds.${NC}"
 }
 
+# --- 🎁 5. التجميع النهائي ---
 gen_anykernel() {
-    echo -e "${BLUE}===> Packaging Files...${NC}"
+    echo -e "${BLUE}===> Packaging Kernel into AnyKernel3...${NC}"
     AK3_DIR="$TC_DIR/RIO/work_ksu"
     rm -rf "$AK3_DIR" && mkdir -p "$AK3_DIR"
     cp -af "$TC_DIR/AnyKernel3/"* "$AK3_DIR/"
     cp "$OUT_DIR/arch/arm64/boot/Image" "$AK3_DIR/"
     cp "$OUT_DIR/arch/arm64/boot/dtbo.img" "$AK3_DIR/"
     cp "$OUT_DIR/arch/arm64/boot/dts/vendor/qcom/yupik.dtb" "$AK3_DIR/dtb" 2>/dev/null || true
+    echo -e "${GREEN}✔ Final Directory is Ready for Upload.${NC}"
 }
 
-# --- Action Logic ---
+# --- 🚀 Main Control Logic ---
 case "$1" in
-    deps) install_deps ;;
+    deps) install_deps "$2" ;;
     tools) fetch_tools ;;
     ksu) setup_ksu ;;
     build) build_kernel "$2" ;;
     pack) gen_anykernel ;;
+    *) echo "Usage: $0 {deps|tools|ksu|build|pack}" ;;
 esac
