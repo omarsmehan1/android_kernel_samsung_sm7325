@@ -1,24 +1,42 @@
-name: Build KSU
+name: Build NovaKernel KSU
+
 on:
   workflow_dispatch:
     inputs:
       device:
-        description: 'Device'
+        description: 'Device to build'
         required: true
         default: 'a73xq'
         type: choice
         options: [a73xq, a52sxq, m52xq]
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
     steps:
+      # 1️⃣ Checkout repository
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - run: |
+
+      # 2️⃣ Build Kernel using bash script
+      - name: Build Kernel
+        run: |
           chmod +x build_ksu.sh
           ./build_ksu.sh ${{ github.event.inputs.device }}
-      - uses: actions/upload-artifact@v4
+
+      # 3️⃣ Generate dynamic artifact name (device + build type + date)
+      - name: Set Artifact Name
+        run: |
+          export ARTIFACT_NAME="NovaKernel-${{ github.event.inputs.device }}-KSU-$(date +%Y%m%d)"
+          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV
+
+      # 4️⃣ Upload the built kernel zip as artifact
+      - name: Upload Kernel Artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: KSU-Kernel
+          name: ${{ env.ARTIFACT_NAME }}
           path: ~/toolchains/RIO/FINAL/*.zip
