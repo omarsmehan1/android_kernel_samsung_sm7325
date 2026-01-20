@@ -1,10 +1,10 @@
-name: 🚀 Build NovaKernel KSU Professional
+name: 🚀 NovaKernel KSU Build
 
 on:
   workflow_dispatch:
     inputs:
       device:
-        description: 'اختر الجهاز المراد بناؤه'
+        description: 'Target Device'
         required: true
         default: 'a73xq'
         type: choice
@@ -13,39 +13,33 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
     steps:
-      - name: 📥 جلب الكود المصدري (Checkout)
+      - name: 📥 Cloning Source
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 📦 تثبيت الأدوات والاعتمادات (Dependencies)
+      - name: 📦 Preparing Environment
         run: |
           chmod +x build_ksu.sh
           ./build_ksu.sh deps
 
-      - name: 🛠️ تحميل سلسلة أدوات Clang (Toolchain)
+      - name: 🛠️ Fetching Toolchain
         run: ./build_ksu.sh tools
 
-      - name: 🧬 إعداد KernelSU و SUSFS
+      - name: 🧬 Integrating KernelSU & SUSFS
         run: ./build_ksu.sh ksu
 
-      - name: 🏗️ بناء النواة (Kernel Compilation)
+      - name: 🏗️ Compiling NovaKernel
+        # هنا سيبدأ السكربت بطباعة اسم الهاتف بشكل إبداعي
         run: ./build_ksu.sh build ${{ github.event.inputs.device }}
 
-      - name: 📦 تجهيز حزمة التفليش (Packaging)
+      - name: 🎁 Finalizing Package
         run: ./build_ksu.sh pack ${{ github.event.inputs.device }}
 
-      - name: 🏷️ تحديد اسم الملف (Set Artifact Name)
-        run: |
-          echo "ARTIFACT_NAME=NovaKernel-${{ github.event.inputs.device }}-KSU-$(date +%Y%m%d)" >> $GITHUB_ENV
-
-      - name: 📤 رفع الكيرنل النهائي (Upload)
+      - name: 📤 Uploading Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ARTIFACT_NAME }}
+          name: NovaKernel-${{ github.event.inputs.device }}-KSU-${{ github.run_id }}
           path: ~/toolchains/RIO/work_ksu/*
           compression-level: 9
