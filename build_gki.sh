@@ -124,7 +124,7 @@ gen_anykernel() {
     )
 }
 
-git switch main
+git switch rio-otg
 install_deps
 fetch_tools
 build_kernel "$1"
