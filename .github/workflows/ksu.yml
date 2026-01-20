@@ -1,10 +1,10 @@
-name: Build NovaKernel KSU
+name: 🚀 Build NovaKernel KSU
 
 on:
   workflow_dispatch:
     inputs:
       device:
-        description: 'Device to build'
+        description: 'اختر الجهاز المراد بناء الكيرنل له'
         required: true
         default: 'a73xq'
         type: choice
@@ -17,26 +17,23 @@ jobs:
       contents: read
 
     steps:
-      # 1️⃣ Checkout repository
-      - uses: actions/checkout@v4
+      - name: 📥 جلب الكود المصدري (Checkout)
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2️⃣ Build Kernel using bash script
-      - name: Build Kernel
+      - name: 🛠️ تشغيل سكربت البناء
         run: |
           chmod +x build_ksu.sh
           ./build_ksu.sh ${{ github.event.inputs.device }}
 
-      # 3️⃣ Generate dynamic artifact name (device + build type + date)
-      - name: Set Artifact Name
+      - name: 🏷️ تحديد اسم الملف (Artifact Name)
         run: |
-          export ARTIFACT_NAME="NovaKernel-${{ github.event.inputs.device }}-KSU-$(date +%Y%m%d)"
-          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV
+          echo "ARTIFACT_NAME=NovaKernel-${{ github.event.inputs.device }}-KSU-$(date +%Y%m%d)" >> $GITHUB_ENV
 
-      # 4️⃣ Upload the built kernel zip as artifact
-      - name: Upload Kernel Artifact
+      - name: 📤 رفع الكيرنل الجاهز
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
-          path: ~/toolchains/RIO/FINAL/*.zip
+          # السر هنا: رفع ما بداخل المجلد مباشرة يمنع الضغط المزدوج
+          path: ~/toolchains/RIO/work_ksu/*
