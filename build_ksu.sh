@@ -2,7 +2,7 @@
 set -e
 set -o pipefail
 
-# --- 🎨 Palette (إعدادات الألوان) ---
+# --- 🎨 Palette ---
 BLUE='\033[0;34m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -20,7 +20,7 @@ JOBS=$(nproc)
 
 export PATH="$TC_DIR/clang-r530567/bin:$PATH"
 
-# --- ✨ اللمسة الإبداعية: لوحة معلومات الجهاز ---
+# --- ✨ البانر المطور: GALAXY Professional Edition ---
 display_target_banner() {
     local device_full_name=""
     case "$1" in
@@ -30,21 +30,23 @@ display_target_banner() {
         *) device_full_name="UNKNOWN DEVICE";;
     esac
 
-    echo -e "${CYAN}__________________________________________________________${NC}"
-    echo -e "${WHITE}  _______  _______  _______  _______  ___      _______  ${NC}"
-    echo -e "${WHITE} |       ||   _   ||       ||       ||   |    |       | ${NC}"
-    echo -e "${WHITE} |    ___||  |_|  ||    ___||    ___||   |    |    ___| ${NC}"
-    echo -e "${WHITE} |   | __ |       ||   | __ |   | __ |   |    |   |___  ${NC}"
-    echo -e "${WHITE} |   ||  ||       ||   ||  ||   ||  ||   |___ |    ___| ${NC}"
-    echo -e "${WHITE} |   |_| ||   _   ||   |_| ||   |_| ||       ||   |___  ${NC}"
-    echo -e "${WHITE} |_______||__| |__||_______||_______||_______||_______| ${NC}"
-    echo -e "${CYAN}__________________________________________________________${NC}"
-    echo -e ""
-    echo -e "${YELLOW}  TARGET PHONE : ${NC}${GREEN}$device_full_name${NC}"
-    echo -e "${YELLOW}  VARIANT      : ${NC}${CYAN}$1${NC}"
-    echo -e "${YELLOW}  DATE         : ${NC}${WHITE}$(date)${NC}"
-    echo -e "${CYAN}__________________________________________________________${NC}\n"
+    echo -e "${CYAN}------------------------------------------------------------${NC}"
+    echo -e "${PURPLE}   ____    _    _        _    __  ____   __"
+    echo -e "  / ___|  / \  | |      / \   \ \/ /\ \ / /"
+    echo -e " | |  _  / _ \ | |     / _ \   \  /  \ V / "
+    echo -e " | |_| |/ ___ \| |___ / ___ \  /  \   | |  "
+    echo -e "  \____/_/   \_\_____/_/   \_\/_/\_\  |_|  "
+    echo -e "${NC}"
+    echo -e "${CYAN}  🚀 NOVA KERNEL BUILD SYSTEM | VERSION 2.0${NC}"
+    echo -e "${CYAN}------------------------------------------------------------${NC}"
+    echo -e "${WHITE}  📱 DEVICE   :${NC} ${GREEN}$device_full_name${NC}"
+    echo -e "${WHITE}  🆔 VARIANT  :${NC} ${YELLOW}$1${NC}"
+    echo -e "${WHITE}  📅 DATE     :${NC} ${CYAN}$(date "+%Y-%m-%d %H:%M:%S")${NC}"
+    echo -e "${WHITE}  🛠️ COMPILER :${NC} ${PURPLE}Clang r530567${NC}"
+    echo -e "${CYAN}------------------------------------------------------------${NC}"
+    echo ""
 }
+
 
 # --- 📦 1. تثبيت الاعتمادات ---
 install_deps() {
@@ -53,20 +55,23 @@ install_deps() {
     sudo apt update && sudo apt install -y git curl zip wget make gcc g++ bc libssl-dev aria2
 }
 
-# --- 🛠️ 2. تحميل الأدوات (Turbo Mode) ---
+# --- 🛠️ 2. تحميل الأدوات (دعم الكاش + Shallow Clone) ---
 fetch_tools() {
-    echo -e "${BLUE}===> Fetching Toolchain (using aria2c for speed)...${NC}"
-    if [[ ! -d "$TC_DIR/clang-r530567" ]]; then
+    echo -e "${BLUE}===> Checking Toolchain...${NC}"
+    if [[ ! -d "$TC_DIR/clang-r530567/bin" ]]; then
+        echo -e "${YELLOW}-> Toolchain not found, downloading...${NC}"
         mkdir -p "$TC_DIR/clang-r530567"
-        # تحميل Clang بـ 16 اتصال متزامن
         aria2c -x16 -s16 -k1M "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r530567.tar.gz" \
                -d "$TC_DIR" -o "clang.tar.gz"
         tar xf "$TC_DIR/clang.tar.gz" -C "$TC_DIR/clang-r530567"
         rm "$TC_DIR/clang.tar.gz"
+    else
+        echo -e "${GREEN}✔ Toolchain found (Cache/Local).${NC}"
     fi
+
     rm -rf "$TC_DIR/AnyKernel3"
-    echo -e "${YELLOW}-> Cloning AnyKernel3...${NC}"
-    git clone "$AK3_REPO" "$TC_DIR/AnyKernel3"
+    echo -e "${YELLOW}-> Cloning AnyKernel3 (Shallow)...${NC}"
+    git clone --depth 1 "$AK3_REPO" "$TC_DIR/AnyKernel3"
 }
 
 # --- 🧬 3. إعداد KernelSU ---
@@ -80,15 +85,13 @@ setup_ksu() {
 # --- 🏗️ 4. بناء النواة (GKI Organized) ---
 build_kernel() {
     display_target_banner "$1"
-    case "$1" in
-        a73xq)  export VARIANT="a73xq";;
-        a52sxq) export VARIANT="a52sxq";;
-        m52xq)  export VARIANT="m52xq";;
-    esac
+    
+    # تحديد الـ Variant
+    export VARIANT="$1"
 
     echo -e "${PURPLE}===> Configuring GKI & Starting Build...${NC}"
 
-    # --- إعدادات GKI المرتبة ---
+    # --- كافة الـ Exports المطلوبة ---
     export ARCH=arm64
     export BRANCH="android11"
     export LLVM=1
@@ -112,6 +115,8 @@ build_kernel() {
     export LOCALVERSION="-NovaKernel-KSU-$BRANCH-$KMI_GENERATION-$COMREV-$VARIANT"
 
     START=$(date +%s)
+    
+    # بدء التجميع
     make -j$JOBS -C "$SRC_DIR" O="$OUT_DIR" $DEFCONF $FRAG
     make -j$JOBS -C "$SRC_DIR" O="$OUT_DIR"
     
@@ -120,20 +125,35 @@ build_kernel() {
 
 # --- 🎁 5. التجميع النهائي ---
 gen_anykernel() {
-    # هذا السطر يحل مشكلة الخطأ الأصفر في GitHub Actions
     echo -e "${BLUE}===> Cleaning up Git metadata...${NC}"
+    # حذف مجلد .git الخاص بـ KernelSU لحل مشكلة GitHub Actions Cleanup
     rm -rf "$SRC_DIR/KernelSU/.git" || true
 
     echo -e "${BLUE}===> Packaging Kernel into AnyKernel3...${NC}"
     AK3_DIR="$TC_DIR/RIO/work_ksu"
     rm -rf "$AK3_DIR" && mkdir -p "$AK3_DIR"
+    
     cp -af "$TC_DIR/AnyKernel3/"* "$AK3_DIR/"
     cp "$OUT_DIR/arch/arm64/boot/Image" "$AK3_DIR/"
     cp "$OUT_DIR/arch/arm64/boot/dtbo.img" "$AK3_DIR/"
     
-    # التأكد من نسخ ملف الـ DTB إذا وجد
+    # نسخ الـ DTB بحذر
     if [ -f "$OUT_DIR/arch/arm64/boot/dts/vendor/qcom/yupik.dtb" ]; then
         cp "$OUT_DIR/arch/arm64/boot/dts/vendor/qcom/yupik.dtb" "$AK3_DIR/dtb"
+    fi
+    
+    echo -e "${GREEN}✔ Final Directory is Ready for Upload.${NC}"
+}
+
+# --- 🚀 Main Control Logic ---
+case "$1" in
+    deps) install_deps "$2" ;;
+    tools) fetch_tools ;;
+    ksu) setup_ksu ;;
+    build) build_kernel "$2" ;;
+    pack) gen_anykernel ;;
+    *) echo "Usage: $0 {deps|tools|ksu|build|pack}" ;;
+esac
     fi
     
     echo -e "${GREEN}✔ Final Directory is Ready for Upload.${NC}"
