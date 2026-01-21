@@ -1,23 +1,45 @@
-name: Build GKI
+name: 🚀 NovaKernel GKI Build
+
+run-name: Build NovaKernel GKI for ${{ inputs.device }} 📱
+
 on:
   workflow_dispatch:
     inputs:
       device:
-        description: 'Device'
+        description: 'Target Device'
         required: true
-        default: 'a52sxq'
+        default: 'a73xq'
         type: choice
         options: [a73xq, a52sxq, m52xq]
+
 jobs:
   build:
+    name: Build GKI for ${{ github.event.inputs.device }}
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
-      - run: |
-          chmod +x build_gki.sh
-          ./build_gki.sh ${{ github.event.inputs.device }}
-      - uses: actions/upload-artifact@v4
+      - name: 📥 Cloning Source
+        uses: actions/checkout@v4
         with:
-          name: GKI-Kernel
-          path: ~/toolchains/RIO/FINAL/*.zip
+          fetch-depth: 1
 
+      - name: 📦 Preparing Environment
+        run: |
+          chmod +x build_gki.sh
+          ./build_gki.sh deps ${{ github.event.inputs.device }}
+
+      - name: 🛠️ Fetching Toolchain
+        run: ./build_gki.sh tools
+
+      - name: 🏗️ Compiling NovaKernel GKI
+        run: ./build_gki.sh build ${{ github.event.inputs.device }}
+
+      - name: 🎁 Finalizing Package
+        run: ./build_gki.sh pack ${{ github.event.inputs.device }}
+
+      - name: 📤 Uploading Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NovaKernel-${{ github.event.inputs.device }}-GKI-${{ github.run_id }}
+          path: ~/toolchains/RIO/work_gki/*
+          compression-level: 9
