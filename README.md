@@ -1,91 +1,114 @@
-NovaKernel 🚀
+🌌 NovaKernel
 
-   
-
-Welcome to the official repository for NovaKernel.
-
-NovaKernel is a custom GKI kernel based on the Rio kernel, built for the Samsung SM7325 platform. The main goal of this project is to provide a clean, stable kernel foundation while integrating KernelSU and SUSFS for modern root management and advanced root concealment.
-
-The focus is on stability, upstream security patches, and keeping the kernel close to stock behavior, with carefully added features that matter.
-
-⚡ Features
-
-NovaKernel focuses on essential improvements without unnecessary changes:
-
-Rio Kernel Base:
-
-Built on top of the Rio kernel source.
-
-Keeps Samsung OneUI behavior and compatibility intact.
-
-
-Linux Upstream:
-
-Kernel version updated to 5.4.302.
-
-(Stock Samsung kernel remains on 5.4.289).
-
-Includes newer security patches and stability fixes.
-
-
-Root & Privacy Enhancements:
-
-KernelSU: Kernel-level root solution with minimal overhead.
-
-SUSFS: Advanced kernel-based hiding for root and system modifications.
-
-
-
-📱 Supported Devices
-
-This kernel targets the SM7325 platform and is intended for:
-
-Samsung Galaxy A73 5G (SM-A736B)
-
-Samsung Galaxy A52s 5G (SM-A528B)
-
-Samsung Galaxy M52 5G (SM-M526B)
-
-
-
----
-
-⚠️ Disclaimer
-
-I am not responsible for bricked devices or any hardware damage.
-
-You are flashing this kernel at your own risk.
-
-
-<div align="center">⚠️ COMPATIBILITY WARNING ⚠️
-
-> [!CAUTION]
-
-STRICTLY FOR ONEUI ONLY
-
-This kernel is NOT compatible with AOSP, LineageOS, Pixel Experience, or GSIs.
-
-Flashing this on any non-OneUI ROM will result in a bootloop.
-
-
+<div align="center">   
 
 </div>
 ---
 
-📥 Downloads & Support
+✨ Overview
 
-Follow development updates and community discussions:
+NovaKernel is a custom GKI kernel based on the Rio kernel, developed specifically for Samsung SM7325 devices running OneUI.
 
-📢 Join Telegram Group: Galaxy A73 Chat
+The project focuses on a clean and reliable kernel base, while carefully integrating KernelSU and SUSFS to provide modern root capabilities with advanced concealment — without breaking stock behavior or stability.
 
-🤝 Credits & Thanks
+NovaKernel is not about bloated features; it is about doing a few things right.
 
-This project builds upon community efforts:
 
-Rio Kernel – Base kernel used for this project.
+---
 
-utkustnr for Samsung kernel sources.
+⚙️ Key Highlights
 
-tilt-rgb for upstreaming work.
+🧱 Rio Kernel Foundation
 
-omarsmehan1 for integrating KernelSU, SUSFS, and maintaining NovaKernel.
+Built directly on top of the Rio kernel source
+
+Preserves Samsung’s original OneUI behavior
+
+Minimal and controlled changes for maximum stability
+
+
+🔐 Root & Concealment
+
+KernelSU – Native, kernel-level root implementation
+
+SUSFS – Powerful kernel-based hiding for root and system modifications
+
+
+🔄 Upstream & Security
+
+Kernel version upgraded to Linux 5.4.302
+
+Includes newer security patches and stability fixes
+
+Ahead of Samsung stock (5.4.289)
+
+
+
+---
+
+📱 Supported Devices
+
+> SM7325 Platform Only
+
+
+
+Samsung Galaxy A73 5G — SM-A736B
+
+Samsung Galaxy A52s 5G — SM-A528B
+
+Samsung Galaxy M52 5G — SM-M526B
+
+
+
+---
+
+⚠️ Important Notice
+
+🚨 OneUI Recommended
+
+> [!WARNING] NovaKernel is primarily developed and tested for Samsung OneUI ROMs.
+
+⚠️ AOSP-based ROMs (LineageOS, Pixel Experience, GSIs, etc.) may boot, but they are NOT officially supported.
+
+❌ Using NovaKernel on AOSP ROMs is not recommended due to potential instability, missing features, or unexpected behavior.
+
+✅ For best stability, compatibility, and support — OneUI is strongly recommended.**
+
+
+
+
+---
+
+📦 Downloads & Community
+
+🔔 Follow releases and updates via GitHub
+
+💬 Community discussion and support:
+
+
+📢 Galaxy A73 Telegram Group
+
+
+---
+
+🧠 Credits
+
+This project stands on the work of the Android kernel community:
+
+Rio Kernel — Base kernel
+
+utkustnr — Samsung kernel sources
+
+tilt-rgb — Kernel upstreaming and fixes
+
+omarsmehan1 — KernelSU & SUSFS integration, NovaKernel maintainer
+
+
+
+---
+
+⚖️ Disclaimer
+
+Flashing this kernel is done at your own risk
+
+I am not responsible for bricked devices or hardware damage
