@@ -18,7 +18,7 @@ OUT_DIR="$SRC_DIR/out"
 TC_DIR="$HOME/toolchains"
 JOBS=$(nproc)
 
-export PATH="$TC_DIR/clang-r530567/bin:$PATH"
+export PATH="$TC_DIR/clang-r547379/bin:$PATH"
 
 # --- ✨ البانر المطور: GALAXY Professional Edition ---
 display_target_banner() {
@@ -42,7 +42,7 @@ display_target_banner() {
     echo -e "${WHITE}  📱 DEVICE   :${NC} ${GREEN}$device_full_name${NC}"
     echo -e "${WHITE}  🆔 VARIANT  :${NC} ${YELLOW}$1${NC}"
     echo -e "${WHITE}  📅 DATE     :${NC} ${CYAN}$(date "+%Y-%m-%d %H:%M:%S")${NC}"
-    echo -e "${WHITE}  🛠️ COMPILER :${NC} ${PURPLE}Clang r530567${NC}"
+    echo -e "${WHITE}  🛠️ COMPILER :${NC} ${PURPLE}Clang r547379${NC}"
     echo -e "${CYAN}------------------------------------------------------------${NC}"
     echo ""
 }
@@ -57,12 +57,12 @@ install_deps() {
 # --- 🛠️ 2. تحميل الأدوات ---
 fetch_tools() {
     echo -e "${BLUE}===> Checking Toolchain...${NC}"
-    if [[ ! -d "$TC_DIR/clang-r530567/bin" ]]; then
+    if [[ ! -d "$TC_DIR/clang-r547379/bin" ]]; then
         echo -e "${YELLOW}-> Toolchain not found, downloading...${NC}"
-        mkdir -p "$TC_DIR/clang-r530567"
-        aria2c -x16 -s16 -k1M "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r530567.tar.gz" \
+        mkdir -p "$TC_DIR/clang-r547379"
+        aria2c -x16 -s16 -k1M "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r547379.tar.gz" \
                -d "$TC_DIR" -o "clang.tar.gz"
-        tar xf "$TC_DIR/clang.tar.gz" -C "$TC_DIR/clang-r530567"
+        tar xf "$TC_DIR/clang.tar.gz" -C "$TC_DIR/clang-r547379"
         rm "$TC_DIR/clang.tar.gz"
     else
         echo -e "${GREEN}✔ Toolchain found (Cache/Local).${NC}"
