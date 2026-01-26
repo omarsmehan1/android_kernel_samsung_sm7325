@@ -83,9 +83,6 @@ setup_ksu() {
     echo -e "${BLUE}===> Integrating KernelSU & SUSFS...${NC}"
     # التأكد من الانتقال للفرع الصحيح قبل الدمج
     git checkout nova-ksu || git switch nova-ksu
-    rm -rf KernelSU
-    rm -rf drivers/kernelsu
-    curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s main
 }
 
 # --- 🏗️ 4. بناء النواة ---
