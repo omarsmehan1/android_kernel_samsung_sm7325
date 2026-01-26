@@ -1,6 +1,7 @@
 name: 🚀 NovaKernel KSU Build
 
-run-name: Build NovaKernel KSU for ${{ inputs.device }} 📱
+# سيظهر اسم العملية في القائمة كـ: Build NovaKernel for a52sxq 📱
+run-name: Build NovaKernel for ${{ inputs.device }} 📱
 
 on:
   workflow_dispatch:
@@ -14,7 +15,8 @@ on:
 
 jobs:
   build:
-    name: Build KSU for ${{ github.event.inputs.device }}
+    # سيظهر اسم المرحلة في القائمة الجانبية كـ: Build for a52sxq
+    name: Build for ${{ github.event.inputs.device }}
     runs-on: ubuntu-latest
     
     steps:
@@ -31,7 +33,10 @@ jobs:
       - name: 🛠️ Fetching Toolchain
         run: ./build_ksu.sh tools
 
-      - name: 🏗️ Compiling NovaKernel KSU
+      - name: 🧬 Integrating KernelSU
+        run: ./build_ksu.sh ksu
+
+      - name: 🏗️ Compiling NovaKernel
         run: ./build_ksu.sh build ${{ github.event.inputs.device }}
 
       - name: 🎁 Finalizing Package
